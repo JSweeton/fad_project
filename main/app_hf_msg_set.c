@@ -13,7 +13,7 @@
 #include "bt_app_hf.h"
 
 // if you want to connect a specific device, add it's bda here
-// esp_bd_addr_t hf_peer_addr = {0x70,0x26,0x05,0xca,0xeb,0x21};
+esp_bd_addr_t hf_peer_addr = {0x28,0x11,0xa5,0x03,0x59,0xfd};
 
 void hf_msg_show_usage(void)
 {
