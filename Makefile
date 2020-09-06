@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := hfp_ag
+PROJECT_NAME := fad_mu
 
 include $(IDF_PATH)/make/project.mk
 
