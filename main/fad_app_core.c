@@ -13,7 +13,7 @@ xQueueHandle fadQueueHandle;
 
 #define QUEUE_LENGTH 5
 #define QUEUE_SIZE sizeof(task_msg)
-#define STACK_DEPTH 100
+#define STACK_DEPTH 2048
 
 #define APP_TAG "FAD_APP_CORE"
 
@@ -45,6 +45,7 @@ bool fad_app_work_dispatch(fad_app_cb_t p_cb, uint16_t event, void *p_params, in
 
 static void fad_app_task_handler(void *params) {
 	task_msg msg;
+	ESP_LOGD(APP_TAG, "Beginning task...");
 
 	for(;;) {
 		BaseType_t isData = xQueueReceive(fadQueueHandle, &msg, 5);
@@ -63,13 +64,17 @@ void fad_app_task_startup() {
 	fadQueueHandle = xQueueCreate(QUEUE_LENGTH, QUEUE_SIZE);
 
 	if( fadQueueHandle == NULL ) {
-		ESP_LOGI(APP_TAG, "Queue could not be created");
+		ESP_LOGW(APP_TAG, "Queue could not be created");
 		return;
+	} else {
+		ESP_LOGD(APP_TAG, "Queue Created");
 	}
 
 	//initialize stack using freertos
-	xTaskCreate(fad_app_task_handler, "FAD_Task_Handler", STACK_DEPTH,
-			0, configMAX_PRIORITIES - 3, &fadTaskHandle);
+	if ( xTaskCreate(fad_app_task_handler, "FAD_Task_Handler", STACK_DEPTH,
+			0, configMAX_PRIORITIES - 4, &fadTaskHandle) != pdPASS) {
+		ESP_LOGW(APP_TAG, "Could not create task");
+	}
 
 }
 

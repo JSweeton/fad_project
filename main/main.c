@@ -19,9 +19,35 @@ enum {
 	FAD_APP_EVT_STACK_UP,
 };
 
+//events for fad_evt
+enum {
+	FAD_HEARTBEAT_EVT,
+};
+
 #define FAD_TAG "FAD"
 
 void fad_hdl_stack_evt(uint16_t evt, void *params);
+
+void fad_main_evt(uint16_t evt, void *params);
+
+
+xTimerHandle xHeartbeatHandle;
+void * xHeartbeatId;
+
+static void vHeartbeatHandler(xTimerHandle xTimer) {
+	if ( fad_app_work_dispatch(fad_main_evt, FAD_HEARTBEAT_EVT, NULL, 0, NULL) != true ) {
+		ESP_LOGW(FAD_TAG, "Couldn't post heartbeat");
+	}
+}
+
+static void heartbeat() {
+
+	xHeartbeatHandle = xTimerCreate("heartbeat", 100, pdTRUE, (void *) 0, vHeartbeatHandler);
+
+	if ( xTimerStart(xHeartbeatHandle, portMAX_DELAY) != pdPASS ) {
+		ESP_LOGW(FAD_TAG, "Couldn't start timer");
+	}
+}
 
 void app_main(void)
 {
@@ -42,16 +68,32 @@ void app_main(void)
     	ESP_LOGW(FAD_TAG, "Couldn't initiate stack");
     }
 
+    heartbeat();
+
+}
+
+void fad_main_evt(uint16_t evt, void *params) {
+
+	switch (evt) {
+	case (FAD_HEARTBEAT_EVT): {
+		ESP_LOGI(FAD_TAG, "Heartbeat evt");
+	}
+	}
 }
 
 
 void fad_hdl_stack_evt(uint16_t evt, void *params) {
-
 	switch (evt) {
-		case (FAD_APP_EVT_STACK_UP): {
-			ESP_LOGI(FAD_TAG, "Initializing stack:");
-		}
+	case (FAD_APP_EVT_STACK_UP):
+		ESP_LOGI(FAD_TAG, "Initializing stack:");
+		break;
+	default:
+		ESP_LOGI(FAD_TAG, "Unhandled event %d", evt);
+		break;
 	}
 
 }
+
+
+
 
