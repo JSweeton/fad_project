@@ -1,0 +1,4 @@
+#FAD GIT Ignore File 
+
+#Ignore all build files
+build/**
