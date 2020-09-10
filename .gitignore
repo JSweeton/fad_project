@@ -2,3 +2,5 @@
 
 #Ignore all build files
 build/**
+script.bat
+flash.bat
