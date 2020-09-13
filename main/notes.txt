@@ -1,0 +1,17 @@
+This notepad will contain general strategy notes for this program, including file organization
+	and strategies
+	
+ADC:
+	The ADC will need to run at specified intervals, at least at a 10 kHz range to detect
+	user's voice. This will be done using a timer interrupt: at specified timer interval,
+	an interrupt will be called, telling the ADC to gather an input from the analog in and
+	transfer it to a digital signal. This will hopefully only take up a fraction of the cpu
+	time, allowing other tasks to handle this timer when it occurs
+	
+	Option: Since freeRTOS operates at 1ms intervals, we can set it up so that the max delay
+	from the user's voice to the headphones is at most ~2ms. This will be imperceptible to the
+	human ear
+	
+	TODO:
+	Set an ESP32 timer to call an interrupt at 10kHz. At every interrupt or every X interrupts,
+	give a semaphore to the ADC data handler to perform an operation on the data.
