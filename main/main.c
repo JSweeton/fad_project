@@ -67,15 +67,16 @@ void app_main(void)
     fad_app_task_startup();
 
     /* Bluetooth device name, connection mode and profile set up */
-    if (fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true) {
-    	ESP_LOGW(FAD_TAG, "Couldn't initiate stack");
-    }
 
     ret = adc_init();
 
     ESP_ERROR_CHECK( ret );
 
     heartbeat();
+
+    if (fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true) {
+    	ESP_LOGW(FAD_TAG, "Couldn't initiate stack");
+    }
 
 }
 
@@ -93,6 +94,9 @@ void fad_hdl_stack_evt(uint16_t evt, void *params) {
 	switch (evt) {
 	case (FAD_APP_EVT_STACK_UP):
 		ESP_LOGI(FAD_TAG, "Initializing program:");
+		if ( adc_timer_start() == ESP_OK ) {
+			ESP_LOGI(FAD_TAG, "Started Timer");
+		}
 		break;
 	default:
 		ESP_LOGI(FAD_TAG, "Unhandled event %d", evt);

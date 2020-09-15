@@ -5,6 +5,11 @@
 #include "esp_intr_alloc.h"
 #include "esp_log.h"
 #include "fad_adc.h"
+#include "fad_app_core.h"
+
+enum {
+	ADC_BUFFER_READY_EVT,
+};
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
@@ -20,6 +25,8 @@ static const char *ADC_TAG = "ADC";
 uint16_t *adc_buffer;
 uint8_t adc_buffer_pos;
 
+
+
 bool adc_timer_intr_handler(void *arg) {
 
 	bool yield = false;
@@ -27,15 +34,25 @@ bool adc_timer_intr_handler(void *arg) {
 	//Need to call ADC API to gather data input and place it in the buffer. Should add
 	//"n" amount of ADC data to queue and
 
-	if (adc_buffer_pos % 2) {
-		ESP_LOGI(ADC_TAG, "Tick!");
-	} else {
-		ESP_LOGI(ADC_TAG, "Tock!");
+	if (adc_buffer_pos % 1024) {
+		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, NULL, 0, NULL);
 	}
 
 	adc_buffer_pos++;
 
+	//after ADC_BUFFER_SIZE length data, push semaphore to task handler
+
 	return yield;
+}
+
+void adc_hdl_evt(uint16_t evt, void *params) {
+
+	switch (evt) {
+	case (ADC_BUFFER_READY_EVT): {
+		ESP_LOGI(ADC_TAG, "Buffer ready");
+	}
+	}
+
 }
 
 esp_err_t adc_init(void) {
@@ -46,7 +63,9 @@ esp_err_t adc_init(void) {
     //attenuation
     adc1_config_channel_atten(ADC1_CHANNEL_0,ADC_ATTEN_DB_0);
 
-    esp_err_t ret = adc_buffer_init();
+    esp_err_t ret;
+
+    ret = adc_buffer_init();
 
     ret = adc_timer_init();
 
@@ -63,16 +82,16 @@ esp_err_t adc_timer_init(void) {
 			.intr_type = TIMER_INTR_LEVEL,
 			.counter_dir = TIMER_COUNT_UP,
 			.auto_reload = TIMER_AUTORELOAD_EN,
-			.divider = 4000,
+			.divider = 20000, //80 MHz / 20000 = 4 kHz
 	};
 
-    timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, 10000);
 
 	esp_err_t err;
 
 	err = timer_init(TIMER_GROUP, TIMER_NUMBER, &adc_timer);
 	err = timer_set_counter_value(TIMER_GROUP, TIMER_NUMBER, 0x00000000ULL);
 	err = timer_enable_intr(TIMER_GROUP, TIMER_NUMBER);
+	err = timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, 10000);
 
 	err = timer_isr_callback_add(
 			TIMER_GROUP,
@@ -84,6 +103,13 @@ esp_err_t adc_timer_init(void) {
 
 	return err;
 
+}
+
+esp_err_t adc_timer_start(void) {
+	esp_err_t ret;
+	ret = timer_start(TIMER_GROUP, TIMER_NUMBER);
+
+	return ret;
 }
 
 esp_err_t adc_buffer_init(void) {
