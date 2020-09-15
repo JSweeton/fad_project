@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
@@ -12,12 +13,14 @@
 #include "esp_system.h"
 #include "esp_log.h"
 #include "fad_app_core.h"
+#include "fad_adc.h"
 
 
 //event enumerations for fad_hdl_stack_evt
 enum {
 	FAD_APP_EVT_STACK_UP,
-};
+	ADC_INIT_EVT,
+	};
 
 //events for fad_evt
 enum {
@@ -57,8 +60,8 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK( ret );
 
+    ESP_ERROR_CHECK( ret );
 
     /* create application task */
     fad_app_task_startup();
@@ -67,6 +70,10 @@ void app_main(void)
     if (fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true) {
     	ESP_LOGW(FAD_TAG, "Couldn't initiate stack");
     }
+
+    ret = adc_init();
+
+    ESP_ERROR_CHECK( ret );
 
     heartbeat();
 
@@ -85,7 +92,7 @@ void fad_main_evt(uint16_t evt, void *params) {
 void fad_hdl_stack_evt(uint16_t evt, void *params) {
 	switch (evt) {
 	case (FAD_APP_EVT_STACK_UP):
-		ESP_LOGI(FAD_TAG, "Initializing stack:");
+		ESP_LOGI(FAD_TAG, "Initializing program:");
 		break;
 	default:
 		ESP_LOGI(FAD_TAG, "Unhandled event %d", evt);
