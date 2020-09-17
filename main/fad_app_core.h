@@ -17,9 +17,7 @@ typedef struct {
 	void *params;
 } task_msg;
 
-/**
- * @brief     parameter deep-copy function to be customized
- */
+
 typedef void (* fad_app_copy_cb_t) (task_msg *msg, void *p_dest, void *p_src);
 
 void fad_app_task_startup();
