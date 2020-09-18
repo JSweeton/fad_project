@@ -1,6 +1,11 @@
-/*
- * Authors: Corey Bean,
+/**
+ * algo_white.c
+ * Author: Corey Bean,
+ * Organization: Messiah Collaboratory
  * Date: 9/17/2020
+ *
+ * Description:
+ * This file runs through the white noise algorithm for our masker.
  */
 
 #include "fad_defs.h"

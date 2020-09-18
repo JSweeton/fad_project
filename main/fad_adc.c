@@ -1,13 +1,14 @@
-/*
+/**
+ * fad_adc.c
  * Author: Corey Bean,
  * Organization: Messiah Collaboratory
  * Date: 9/17/2020
- */
-
-/*
- * fad_adc.c: This file handles ADC input for the user's voice audio data.
+ *
+ * Description:
+ * This file handles ADC input for the user's voice audio data.
  * It uses an ESP32 hardware timer with an interrupt
  */
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include "driver/adc.h"
@@ -19,28 +20,31 @@
 #include "fad_dac.h"
 #include "fad_defs.h"
 
+/**
+ * Event enumeration for ADC-related events
+ */
 enum {
 	ADC_BUFFER_READY_EVT,
-};
+} adc_evt;
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
 
-
 static const char *ADC_TAG = "ADC";
 
-/*
+/**
  * 	Need a circular buffer for the adc input, as well as a tracker for the
  * 	current position in the queue
  */
-
 uint16_t *adc_buffer;
 uint8_t *dac_buffer;
 uint16_t adc_buffer_pos;
 uint16_t dac_buffer_pos;
 
-/*
- * Event handler for ADC-related events
+/**
+ * @brief	Event handler for ADC-related events
+ * @param 	evt -> An event enum, listed above
+ * @param 	params
  */
 void adc_hdl_evt(uint16_t evt, void *params) {
 
@@ -52,17 +56,20 @@ void adc_hdl_evt(uint16_t evt, void *params) {
 
 }
 
-/*
- * Allocates space for the ADC input buffer
+/**
+ * @brief	Initialize input buffer for ADC data, as well as DAC buffer for output
+ * @return
+ * 		-ESP_OK if successful
+ * 		-ESP_ERR_NO_MEM if buffers cannot be allocated memory
  */
 static esp_err_t adc_buffer_init(void) {
-	adc_buffer = (uint16_t *) calloc(ADC_BUFFER_SIZE, sizeof(uint16_t));
-	if(adc_buffer == NULL) {
+	adc_buffer = (uint16_t*) calloc(ADC_BUFFER_SIZE, sizeof(uint16_t));
+	if (adc_buffer == NULL) {
 		return ESP_ERR_NO_MEM;
 	}
 
-	dac_buffer = (uint8_t *) calloc(ADC_BUFFER_SIZE, sizeof(uint8_t));
-	if(dac_buffer == NULL) {
+	dac_buffer = (uint8_t*) calloc(ADC_BUFFER_SIZE, sizeof(uint8_t));
+	if (dac_buffer == NULL) {
 		return ESP_ERR_NO_MEM;
 	}
 
@@ -72,11 +79,16 @@ static esp_err_t adc_buffer_init(void) {
 	return ESP_OK;
 }
 
-
-/*
- * Interrupt that is called every time the timer reaches the alarm value. Its purpose
+/**
+ * @brief Interrupt that is called every time the timer reaches the alarm value. Its purpose
  * is to perform an ADC reading and warn the ADC event handler when the buffer fills up,
  * so that the desired algo function will operate on the data.
+ *
+ * @param arg -> Optional arg to be passed to interrupt from timer.
+ *
+ * @return
+ * 		-true if a higher priority task has awoken from handler execution
+ * 		-false if no task was awoken
  */
 bool adc_timer_intr_handler(void *arg) {
 
@@ -100,19 +112,22 @@ bool adc_timer_intr_handler(void *arg) {
 	return yield;
 }
 
-
-
+/**
+ * @brief 	Initializes the timer for the ADC input. Uses API found in driver/timer.h
+ * @return
+ * 		-ESP_OK if successful
+ * 		-Non-zero if unsuccessful
+ */
 esp_err_t adc_timer_init(void) {
 	//API struct from driver/timer.h
-	timer_config_t adc_timer = {
-			.alarm_en = TIMER_ALARM_EN,
-			.counter_en = TIMER_PAUSE,
-			.intr_type = TIMER_INTR_LEVEL,
-			.counter_dir = TIMER_COUNT_UP,
-			.auto_reload = TIMER_AUTORELOAD_EN,
-			.divider = 20000, //80 MHz / 20000 = 4 kHz
-	};
-
+	timer_config_t adc_timer =
+			{ .alarm_en = TIMER_ALARM_EN,
+				.counter_en = TIMER_PAUSE,
+				.intr_type = TIMER_INTR_LEVEL,
+				.counter_dir = TIMER_COUNT_UP,
+				.auto_reload = TIMER_AUTORELOAD_EN,
+				.divider = 20000, //80 MHz / 20000 = 4 kHz
+			};
 
 	esp_err_t err;
 
@@ -121,39 +136,40 @@ esp_err_t adc_timer_init(void) {
 	err = timer_set_counter_value(TIMER_GROUP, TIMER_NUMBER, 0x00000000ULL);
 	err = timer_enable_intr(TIMER_GROUP, TIMER_NUMBER);
 	err = timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, 10000);
-	err = timer_isr_callback_add(
-			TIMER_GROUP,
-			TIMER_NUMBER,
-			adc_timer_intr_handler,
-			0,
-			ESP_INTR_FLAG_LOWMED
-		);
+	err = timer_isr_callback_add(TIMER_GROUP, TIMER_NUMBER, adc_timer_intr_handler, 0, ESP_INTR_FLAG_LOWMED);
 
 	return err;
 
 }
-
+/**
+ * @brief	Initializes ADC settings and calls function to initiate timer and buffer
+ *
+ * @return
+ * 		-ESP_OK if successful
+ */
 esp_err_t adc_init(void) {
 
 	//bit width of ADC input
-    adc1_config_width(ADC_WIDTH_BIT_12);
+	adc1_config_width(ADC_WIDTH_BIT_12);
 
-    //attenuation
-    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_0);
+	//attenuation
+	adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_0);
 
-    esp_err_t ret;
+	esp_err_t ret;
 
-    ret = adc_buffer_init();
+	ret = adc_buffer_init();
 
-    ret = adc_timer_init();
+	ret = adc_timer_init();
 
-    return ret;
+	return ret;
 
 }
 
-
-/*
- * Function to start the timer, meaning interrupts will start occurring
+/**
+ * @brief	Function to start the timer, meaning interrupts will start occurring
+ *
+ * @return
+ * 		-ESP_OK if successful
  */
 esp_err_t adc_timer_start(void) {
 	esp_err_t ret;

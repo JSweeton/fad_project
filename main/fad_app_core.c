@@ -1,3 +1,13 @@
+/**
+ * fad_app_core.c
+ * Author: Corey Bean,
+ * Organization: Messiah Collaboratory
+ * Date: 9/17/2020
+ *
+ * Description:
+ * This file starts the task handlers and queues for the FAD project.
+ */
+
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>

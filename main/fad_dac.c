@@ -1,3 +1,13 @@
+/**
+ * fad_dac.c
+ * Author: Corey Bean,
+ * Organization: Messiah Collaboratory
+ * Date: 9/17/2020
+ *
+ * Description:
+ * This file initializes and handles functions for the DAC output
+ */
+
 #include <stdlib.h>
 #include "fad_dac.h"
 #include "driver/dac.h"
