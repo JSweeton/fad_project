@@ -1,14 +1,10 @@
-#include <stdint.h>
+#ifndef _FAD_APP_CORE_H_
+#define _FAD_APP_CORE_H_
+
 #include <stdbool.h>
 #include <stdio.h>
+#include "fad_defs.h"
 
-
-
-
-/**
- * @brief     callback function for app events
- */
-typedef void (* fad_app_cb_t) (uint16_t event, void *param);
 
 //message for tasks
 typedef struct {
@@ -25,3 +21,5 @@ void fad_app_task_startup();
 bool fad_app_work_dispatch(fad_app_cb_t p_cb, uint16_t event, void *p_params, int param_len, fad_app_copy_cb_t p_copy_cb);
 
 void fad_app_task_shutdown();
+
+#endif

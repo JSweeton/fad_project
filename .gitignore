@@ -2,5 +2,10 @@
 
 #Ignore all build files
 build/**
-script.bat
+
+#ignore custom .bat files
 flash.bat
+init.bat
+
+#ignore editor files
+.vscode

@@ -19,6 +19,8 @@
 #include "fad_app_core.h"
 #include "fad_dac.h"
 #include "fad_defs.h"
+#include "fad_algorithms/algo_white.c"
+
 
 /**
  * Event enumeration for ADC-related events
@@ -26,6 +28,18 @@
 enum {
 	ADC_BUFFER_READY_EVT,
 } adc_evt;
+
+typedef union {
+
+	/**
+	 * @brief ADC_BUFFER_READY_EVT
+	 */
+	struct adc_buffer_rdy_param {
+		uint16_t adc_pos;
+		uint16_t dac_pos;
+	} buff_pos;
+
+} adc_evt_params;
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
@@ -40,17 +54,22 @@ uint16_t *adc_buffer;
 uint8_t *dac_buffer;
 uint16_t adc_buffer_pos;
 uint16_t dac_buffer_pos;
+algo_func_t algo_function;
 
 /**
  * @brief	Event handler for ADC-related events
- * @param 	evt -> An event enum, listed above
- * @param 	params
+ * @param 	evt An event for the adc
+ * @param 	params Optional event parameters if necessary
  */
 void adc_hdl_evt(uint16_t evt, void *params) {
 
 	switch (evt) {
 	case (ADC_BUFFER_READY_EVT): {
 		ESP_LOGI(ADC_TAG, "Buffer ready");
+		adc_evt_params *data = (adc_evt_params *) params;
+		uint16_t *adc_buff = adc_buffer + data->buff_pos.adc_pos;
+		uint8_t *dac_buff = dac_buffer + data->buff_pos.dac_pos;
+		algo_function(adc_buff, dac_buff);
 	}
 	}
 
@@ -83,9 +102,7 @@ static esp_err_t adc_buffer_init(void) {
  * @brief Interrupt that is called every time the timer reaches the alarm value. Its purpose
  * is to perform an ADC reading and warn the ADC event handler when the buffer fills up,
  * so that the desired algo function will operate on the data.
- *
- * @param arg -> Optional arg to be passed to interrupt from timer.
- *
+ * @param arg Optional arg to be passed to interrupt from timer.
  * @return
  * 		-true if a higher priority task has awoken from handler execution
  * 		-false if no task was awoken
@@ -97,8 +114,13 @@ bool adc_timer_intr_handler(void *arg) {
 	//Need to call ADC API to gather data input and place it in the buffer. Should add
 	//"n" amount of ADC data to queue and
 
-	if (adc_buffer_pos % adc_algo_size) {
-		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, NULL, 0, NULL);
+	if (adc_buffer_pos % adc_algo_size == 0) {
+
+		adc_evt_params *params = malloc(sizeof(adc_evt_params));
+		params->buff_pos.adc_pos = adc_buffer_pos;
+		params->buff_pos.dac_pos = dac_buffer_pos;
+		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) params, sizeof(adc_evt_params), NULL);
+		free(params);
 	}
 
 	adc_buffer[adc_buffer_pos] = adc1_get_raw(ADC1_CHANNEL_0);
@@ -143,7 +165,6 @@ esp_err_t adc_timer_init(void) {
 }
 /**
  * @brief	Initializes ADC settings and calls function to initiate timer and buffer
- *
  * @return
  * 		-ESP_OK if successful
  */
@@ -161,13 +182,14 @@ esp_err_t adc_init(void) {
 
 	ret = adc_timer_init();
 
+	algo_white_init(&algo_function);
+
 	return ret;
 
 }
 
 /**
  * @brief	Function to start the timer, meaning interrupts will start occurring
- *
  * @return
  * 		-ESP_OK if successful
  */

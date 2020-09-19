@@ -10,8 +10,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -76,7 +74,7 @@ void app_main(void)
 {
     // Initialize NVS.
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if ( ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND ) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
@@ -96,7 +94,7 @@ void app_main(void)
 
     //heartbeat();
 
-    if (fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true) {
+    if ( fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true ) {
     	ESP_LOGW(FAD_TAG, "Couldn't initiate stack");
     }
 
@@ -130,6 +128,7 @@ void fad_hdl_stack_evt(uint16_t evt, void *params) {
 			ESP_LOGI(FAD_TAG, "Started Timer");
 		}
 		break;
+
 	default:
 		ESP_LOGI(FAD_TAG, "Unhandled event %d", evt);
 		break;

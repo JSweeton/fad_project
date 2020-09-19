@@ -1,6 +1,10 @@
-#include "esp_system.h"
+#ifndef _FAD_DAC_H_
+#define _FAD_DAC_H_
 
+#include "esp_system.h"
 
 
 esp_err_t dac_init(void);
 void dac_output(uint8_t *dac_buffer, uint16_t dac_buffer_pos);
+
+#endif
