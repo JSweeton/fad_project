@@ -12,11 +12,14 @@
 #include <stdlib.h>
 #include "esp_system.h"
 
+
+
 /*
  * ADC Definitions
  */
 
 #define ADC_BUFFER_SIZE 1024 //Buffer size for holding ADC data
+#define DAC_BUFFER_SIZE 1024
 
 
 
@@ -25,6 +28,7 @@
  */
 
 uint16_t adc_algo_size; //determines the chunck size fed to the algorithm
+char *ALGO_TAG;
 
 /*
 * Function typedefs
@@ -33,7 +37,7 @@ uint16_t adc_algo_size; //determines the chunck size fed to the algorithm
 /**
  * @brief     algorithm function
  */
-typedef void (* algo_func_t) (uint16_t *adc_buff, uint8_t *dac_buff);
+typedef void (* algo_func_t) (uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos);
 
 /**
  * @brief     callback function for app events

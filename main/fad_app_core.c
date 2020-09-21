@@ -102,7 +102,7 @@ void fad_app_task_startup() {
 
 	//initialize stack using freertos
 	if ( xTaskCreate(fad_app_task_handler, "FAD_Task_Handler", STACK_DEPTH,
-			0, configMAX_PRIORITIES - 4, &fadTaskHandle) != pdPASS) {
+					 0, configMAX_PRIORITIES - 4, &fadTaskHandle) != pdPASS) {
 		ESP_LOGW(APP_TAG, "Could not create task");
 	}
 

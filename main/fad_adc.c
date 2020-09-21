@@ -20,6 +20,9 @@
 #include "fad_dac.h"
 #include "fad_defs.h"
 #include "fad_algorithms/algo_white.c"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
 
 
 /**
@@ -43,8 +46,14 @@ typedef union {
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
+#define ALARM_STEP_SIZE 40
+
+#define STACK_DEPTH 2048
 
 static const char *ADC_TAG = "ADC";
+
+SemaphoreHandle_t alarmSemaphoreHandle;
+xTaskHandle alarmTaskHandle;
 
 /**
  * 	Need a circular buffer for the adc input, as well as a tracker for the
@@ -54,6 +63,8 @@ uint16_t *adc_buffer;
 uint8_t *dac_buffer;
 uint16_t adc_buffer_pos;
 uint16_t dac_buffer_pos;
+uint16_t adc_buffer_pos_copy;
+uint16_t dac_buffer_pos_copy;
 algo_func_t algo_function;
 
 /**
@@ -67,9 +78,7 @@ void adc_hdl_evt(uint16_t evt, void *params) {
 	case (ADC_BUFFER_READY_EVT): {
 		ESP_LOGI(ADC_TAG, "Buffer ready");
 		adc_evt_params *data = (adc_evt_params *) params;
-		uint16_t *adc_buff = adc_buffer + data->buff_pos.adc_pos;
-		uint8_t *dac_buff = dac_buffer + data->buff_pos.dac_pos;
-		algo_function(adc_buff, dac_buff);
+		algo_function(adc_buffer, dac_buffer, data->buff_pos.adc_pos, data->buff_pos.dac_pos);
 	}
 	}
 
@@ -108,30 +117,42 @@ static esp_err_t adc_buffer_init(void) {
  * 		-false if no task was awoken
  */
 bool adc_timer_intr_handler(void *arg) {
-
-	bool yield = false;
-
-	//Need to call ADC API to gather data input and place it in the buffer. Should add
-	//"n" amount of ADC data to queue and
-
-	if (adc_buffer_pos % adc_algo_size == 0) {
-
-		adc_evt_params *params = malloc(sizeof(adc_evt_params));
-		params->buff_pos.adc_pos = adc_buffer_pos;
-		params->buff_pos.dac_pos = dac_buffer_pos;
-		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) params, sizeof(adc_evt_params), NULL);
-		free(params);
-	}
-
-	adc_buffer[adc_buffer_pos] = adc1_get_raw(ADC1_CHANNEL_0);
-
-	dac_output(dac_buffer, dac_buffer_pos);
+	
+	BaseType_t yield = false;
 
 	//advance buffer, resetting to zero at max buffer position
 	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
 	dac_buffer_pos = (dac_buffer_pos + 1) % ADC_BUFFER_SIZE;
 
-	return yield;
+	adc_buffer[adc_buffer_pos] = adc1_get_raw(ADC1_CHANNEL_0);
+	dac_output(dac_buffer, dac_buffer_pos);
+
+	if (adc_buffer_pos % adc_algo_size == 0) {
+		adc_buffer_pos_copy = adc_buffer_pos; //these copies provide a stable reference for the algorithm to work on
+		dac_buffer_pos_copy = dac_buffer_pos;
+		xSemaphoreGiveFromISR(alarmSemaphoreHandle, &yield);
+		
+	}
+
+	return (bool) yield;
+}
+
+static void alarm_task(void *params) {
+	for(;;) {
+
+		xSemaphoreTake(alarmSemaphoreHandle, portMAX_DELAY);
+
+		adc_evt_params params = {
+			.buff_pos.adc_pos = adc_buffer_pos_copy,
+			.buff_pos.dac_pos = dac_buffer_pos_copy,
+		};
+
+		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) &params, sizeof(adc_evt_params), NULL);
+		// ESP_LOGI(ADC_TAG, "TASK TAKEN!");
+
+	}
+
+	vTaskDelete(alarmTaskHandle);
 }
 
 /**
@@ -148,7 +169,7 @@ esp_err_t adc_timer_init(void) {
 				.intr_type = TIMER_INTR_LEVEL,
 				.counter_dir = TIMER_COUNT_UP,
 				.auto_reload = TIMER_AUTORELOAD_EN,
-				.divider = 20000, //80 MHz / 20000 = 4 kHz
+				.divider = 2000, //80 MHz / 2000 = 40 kHz
 			};
 
 	esp_err_t err;
@@ -157,12 +178,16 @@ esp_err_t adc_timer_init(void) {
 	err = timer_init(TIMER_GROUP, TIMER_NUMBER, &adc_timer);
 	err = timer_set_counter_value(TIMER_GROUP, TIMER_NUMBER, 0x00000000ULL);
 	err = timer_enable_intr(TIMER_GROUP, TIMER_NUMBER);
-	err = timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, 10000);
+	err = timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, ALARM_STEP_SIZE);
 	err = timer_isr_callback_add(TIMER_GROUP, TIMER_NUMBER, adc_timer_intr_handler, 0, ESP_INTR_FLAG_LOWMED);
 
-	return err;
+	alarmSemaphoreHandle = xSemaphoreCreateBinary();
+	xTaskCreate(alarm_task, "Interrupt_Alarm_Task_Handler", STACK_DEPTH,
+				0, configMAX_PRIORITIES - 3, &alarmTaskHandle);
 
+	return err;
 }
+
 /**
  * @brief	Initializes ADC settings and calls function to initiate timer and buffer
  * @return
