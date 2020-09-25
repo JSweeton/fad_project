@@ -20,6 +20,7 @@
 #include "fad_dac.h"
 #include "fad_defs.h"
 #include "fad_algorithms/algo_white.c"
+#include "fad_algorithms/algo_test.c"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -46,7 +47,9 @@ typedef union {
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
-#define ALARM_STEP_SIZE 40
+#define ALARM_STEP_SIZE 10
+#define TIMER_FREQ 40000
+#define CLOCK_DIVIDER (80000000 / TIMER_FREQ) //divider required to make timer 
 
 #define STACK_DEPTH 2048
 
@@ -78,6 +81,7 @@ void adc_hdl_evt(uint16_t evt, void *params) {
 	case (ADC_BUFFER_READY_EVT): {
 		ESP_LOGI(ADC_TAG, "Buffer ready");
 		adc_evt_params *data = (adc_evt_params *) params;
+		ESP_LOGI(ADC_TAG, "ADC Value: %d", adc_buffer[0]);
 		algo_function(adc_buffer, dac_buffer, data->buff_pos.adc_pos, data->buff_pos.dac_pos);
 	}
 	}
@@ -124,7 +128,7 @@ bool adc_timer_intr_handler(void *arg) {
 	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
 	dac_buffer_pos = (dac_buffer_pos + 1) % ADC_BUFFER_SIZE;
 
-	adc_buffer[adc_buffer_pos] = adc1_get_raw(ADC1_CHANNEL_0);
+	adc_buffer[adc_buffer_pos] = adc1_get_raw(ADC1_CHANNEL_6);
 	dac_output(dac_buffer, dac_buffer_pos);
 
 	if (adc_buffer_pos % adc_algo_size == 0) {
@@ -149,7 +153,6 @@ static void alarm_task(void *params) {
 
 		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) &params, sizeof(adc_evt_params), NULL);
 		// ESP_LOGI(ADC_TAG, "TASK TAKEN!");
-
 	}
 
 	vTaskDelete(alarmTaskHandle);
@@ -169,7 +172,7 @@ esp_err_t adc_timer_init(void) {
 				.intr_type = TIMER_INTR_LEVEL,
 				.counter_dir = TIMER_COUNT_UP,
 				.auto_reload = TIMER_AUTORELOAD_EN,
-				.divider = 2000, //80 MHz / 2000 = 40 kHz
+				.divider = CLOCK_DIVIDER, //80 MHz / 2000 = 40 kHz
 			};
 
 	esp_err_t err;
@@ -199,7 +202,7 @@ esp_err_t adc_init(void) {
 	adc1_config_width(ADC_WIDTH_BIT_12);
 
 	//attenuation
-	adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_0);
+	adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_0);
 
 	esp_err_t ret;
 
@@ -207,7 +210,7 @@ esp_err_t adc_init(void) {
 
 	ret = adc_timer_init();
 
-	algo_white_init(&algo_function);
+	algo_test_init(&algo_function);
 
 	return ret;
 

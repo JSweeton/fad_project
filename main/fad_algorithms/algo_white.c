@@ -20,14 +20,15 @@
  * @param dac_buff [OUT] Buffer that points to the beggining of DAC data staged to be output to the DAC
  */
 void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos) {
-
+	uint16_t pos = dac_pos;
 	for(int i = 0; i < adc_algo_size; i++) {
-		uint16_t pos = dac_pos + i;
+		
 		if( pos > DAC_BUFFER_SIZE ) {
 			ESP_LOGW(ALGO_TAG, "Writing to invalid memory, DAC_POS: %d", dac_pos);
 		} else {
 			dac_buff[pos] = (i % 2) ? 255 : 0; // set sawtooth wave (when i is even, set 255 : odd, 0)
 		}
+		pos++;
 	}
 	ESP_LOGD(ALGO_TAG, "Algorithm Running, dac_pos: %d", dac_pos);
 }
