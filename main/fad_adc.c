@@ -48,7 +48,7 @@ typedef union {
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
 #define ALARM_STEP_SIZE 10
-#define TIMER_FREQ 40000
+#define TIMER_FREQ 80000
 #define CLOCK_DIVIDER (80000000 / TIMER_FREQ) //divider required to make timer 
 
 #define STACK_DEPTH 2048
@@ -79,7 +79,6 @@ void adc_hdl_evt(uint16_t evt, void *params) {
 
 	switch (evt) {
 	case (ADC_BUFFER_READY_EVT): {
-		ESP_LOGI(ADC_TAG, "Buffer ready");
 		adc_evt_params *data = (adc_evt_params *) params;
 		ESP_LOGI(ADC_TAG, "ADC Value: %d", adc_buffer[0]);
 		algo_function(adc_buffer, dac_buffer, data->buff_pos.adc_pos, data->buff_pos.dac_pos);
@@ -210,7 +209,7 @@ esp_err_t adc_init(void) {
 
 	ret = adc_timer_init();
 
-	algo_test_init(&algo_function);
+	algo_white_init(&algo_function);
 
 	return ret;
 
