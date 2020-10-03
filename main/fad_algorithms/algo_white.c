@@ -24,20 +24,31 @@
 void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos) {
 	uint16_t d_pos = dac_pos;
     uint16_t a_pos = adc_pos;
-	//uint32_t rand = esp_random();
-	for(int i = 0; i < adc_algo_size; i++) {
 
-		//Attempted optimization, to only call esp_random once every 4 cycles. Not sure if it is any faster
-		// int rand_pos = i % 4;
-		// if(rand_pos = 0) rand = esp_random();
-		// char output = (adc_buff[a_pos] >> 4) - (char) (rand >> (rand_pos * 8))
+	//quick scan for max/min
+	uint16_t max = 0;
+	uint16_t min = 0xFFFF;
+	for(int i = 0; i < 64; i++) {
+		max = (max < adc_buff[a_pos + i]) ? adc_buff[a_pos + i] : max;
+		min = (min > adc_buff[a_pos + i]) ? adc_buff[a_pos + i] : min;
 
+	}
+	uint16_t diff = max - min;
+	dac_buff[d_pos] = 0;
+	for(int i = 0; i < adc_algo_size - 1; i++) {
+
+		//to center input wave around 0 plus some, we effectively take discrete derivative, then discrete integral
+		
+		dac_buff[d_pos + 1] = (dac_buff[d_pos] + adc_buff[a_pos + 1] - adc_buff[a_pos] + (diff / 2)) >> 4;
+
+		if( dac_buff[d_pos + 1] > ( (diff >> 4) * 2 ) ) dac_buff[d_pos + 1] = (diff / 2);
+ 
 		//bitwise AND ADC_buff value (12-bit to 8-bit) by some random char. Should make some input-dependent noise.
-		char output = (adc_buff[a_pos] >> 4) & ((unsigned char)(esp_random()) | 0x80); 
-		dac_buff[d_pos] = output;
+		dac_buff[d_pos + 1] = ((unsigned char)(esp_random()) & dac_buff[d_pos + 1]); 
+		// dac_buff[d_pos] = output;
 		d_pos++; a_pos++;
 	}
-	ESP_LOGD(ALGO_TAG, "Algorithm Running, dac_pos: %d", dac_pos);
+	ESP_LOGI(ALGO_TAG, "Algorithm Running, min: %4d, max: %4d, output: %3d", min, max, dac_buff[5]);
 }
 
 /**

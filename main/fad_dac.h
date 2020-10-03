@@ -5,6 +5,7 @@
 
 
 esp_err_t dac_init(void);
-void dac_output(uint8_t *dac_buffer, uint16_t dac_buffer_pos);
+
+void IRAM_ATTR dac_output_value(uint8_t value);
 
 #endif

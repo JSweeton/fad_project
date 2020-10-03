@@ -12,6 +12,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include "driver/adc.h"
+#include "hal/adc_types.h"
+#include "hal/adc_ll.h"
 #include "driver/timer.h"
 #include "esp_intr_alloc.h"
 #include "esp_log.h"
@@ -24,6 +26,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+
 
 
 /**
@@ -80,7 +83,7 @@ void adc_hdl_evt(uint16_t evt, void *params) {
 	switch (evt) {
 	case (ADC_BUFFER_READY_EVT): {
 		adc_evt_params *data = (adc_evt_params *) params;
-		ESP_LOGI(ADC_TAG, "ADC Value: %d", adc_buffer[0]);
+		ESP_LOGD(ADC_TAG, "ADC Value: %d", adc_buffer[0]);
 		algo_function(adc_buffer, dac_buffer, data->buff_pos.adc_pos, data->buff_pos.dac_pos);
 	}
 	}
@@ -111,6 +114,19 @@ static esp_err_t adc_buffer_init(void) {
 }
 
 /**
+ * @brief Mimic of ESP-IDF's ADC converter code. Needed to be replicated to utulize IRAM_ATTR and for max speed.
+ * See toptal.com/embedded/esp32-audio-sampling for more information
+ * @param channel The channel to be read from
+ * @return The value read from the ADC
+ */
+static int IRAM_ATTR local_adc1_read(int channel) {
+    adc_ll_rtc_enable_channel(ADC_NUM_1, channel);
+    adc_ll_rtc_start_convert(ADC_NUM_1, channel);
+    while (adc_ll_rtc_convert_is_done(ADC_NUM_1) != true);
+    return adc_ll_rtc_get_convert_value(ADC_NUM_1);
+}
+
+/**
  * @brief Interrupt that is called every time the timer reaches the alarm value. Its purpose
  * is to perform an ADC reading and warn the ADC event handler when the buffer fills up,
  * so that the desired algo function will operate on the data.
@@ -119,16 +135,17 @@ static esp_err_t adc_buffer_init(void) {
  * 		-true if a higher priority task has awoken from handler execution
  * 		-false if no task was awoken
  */
-bool adc_timer_intr_handler(void *arg) {
+void IRAM_ATTR adc_timer_intr_handler(void *arg) {
 	
+	timer_spinlock_take(TIMER_GROUP);
 	BaseType_t yield = false;
 
 	//advance buffer, resetting to zero at max buffer position
 	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
 	dac_buffer_pos = (dac_buffer_pos + 1) % ADC_BUFFER_SIZE;
 
-	adc_buffer[adc_buffer_pos] = adc1_get_raw(ADC1_CHANNEL_6);
-	dac_output(dac_buffer, dac_buffer_pos);
+	adc_buffer[adc_buffer_pos] = local_adc1_read(ADC1_CHANNEL_6);
+	dac_output_value(dac_buffer[dac_buffer_pos]);
 
 	if (adc_buffer_pos % adc_algo_size == 0) {
 		adc_buffer_pos_copy = adc_buffer_pos; //these copies provide a stable reference for the algorithm to work on
@@ -137,7 +154,12 @@ bool adc_timer_intr_handler(void *arg) {
 		
 	}
 
-	return (bool) yield;
+	//clear the interrupt
+	timer_group_clr_intr_status_in_isr(TIMER_GROUP, TIMER_NUMBER);
+
+	timer_spinlock_give(TIMER_GROUP);
+	if(yield) taskYIELD();
+
 }
 
 static void alarm_task(void *params) {
@@ -181,7 +203,7 @@ esp_err_t adc_timer_init(void) {
 	err = timer_set_counter_value(TIMER_GROUP, TIMER_NUMBER, 0x00000000ULL);
 	err = timer_enable_intr(TIMER_GROUP, TIMER_NUMBER);
 	err = timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, ALARM_STEP_SIZE);
-	err = timer_isr_callback_add(TIMER_GROUP, TIMER_NUMBER, adc_timer_intr_handler, 0, ESP_INTR_FLAG_LOWMED);
+	err = timer_isr_register(TIMER_GROUP, TIMER_NUMBER, adc_timer_intr_handler, 0, ESP_INTR_FLAG_IRAM, NULL);
 
 	alarmSemaphoreHandle = xSemaphoreCreateBinary();
 	xTaskCreate(alarm_task, "Interrupt_Alarm_Task_Handler", STACK_DEPTH,

@@ -10,7 +10,10 @@
 
 #include <stdlib.h>
 #include "fad_dac.h"
+
 #include "driver/dac.h"
+#include "soc/dac_periph.h"
+#include "hal/dac_types.h"
 #include "esp_system.h"
 
 #define DAC_CHANNEL DAC_CHANNEL_1
@@ -23,12 +26,19 @@ esp_err_t dac_init(void) {
 	return err;
 }
 
-/**
- * @brief Output given 8 bit value to DAC for the defined DAC_CHANNEL in fad_dac.c
- * @param dac_buffer Pointer to the dac_buffer, which holds the set of dac values to be output
- * @param dac_buffer_pos Current position of next ouput in dac_buffer
- */
-void dac_output(uint8_t *dac_buffer, uint16_t dac_buffer_pos) {
-	dac_output_voltage(DAC_CHANNEL, dac_buffer[dac_buffer_pos]);
 
+/**
+ * @brief Output voltage with value (8 bit).
+ * @param channel DAC channel num.
+ * @param value Output value. Value range: 0 ~ 255.
+ *        The corresponding range of voltage is 0v ~ VDD3P3_RTC.
+ */
+void IRAM_ATTR dac_output_value(uint8_t value) {
+    if (DAC_CHANNEL == DAC_CHANNEL_1) {
+        SENS.sar_dac_ctrl2.dac_cw_en1 = 0;
+        RTCIO.pad_dac[DAC_CHANNEL].dac = value;
+    } else if (DAC_CHANNEL == DAC_CHANNEL_2) {
+        SENS.sar_dac_ctrl2.dac_cw_en2 = 0;
+        RTCIO.pad_dac[DAC_CHANNEL].dac = value;
+    }
 }
