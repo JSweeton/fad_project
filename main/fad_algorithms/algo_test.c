@@ -31,18 +31,19 @@ void algo_test(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t
     uint8_t val = running_ADC_average >> 24; //use only MSB of running_ADC_average
 	ESP_LOGI(ALGO_TAG, "Algorithm Running, average: %ud, val: %ud" , running_ADC_average, val);
     running_ADC_average = 0x3FFFFFFF;
-	for(int i = 0;  i < adc_algo_size; i++) {
-		
-		dac_buff[d_pos] = (i % 2) ? val : 0;
 
-        running_ADC_average += (adc_buff[a_pos] << BIT_SHIFT);
-        d_pos++; a_pos++;
+	for(int i = 0;  i < (adc_algo_size / MULTISAMPLES); i++) {
+		
+		dac_buff[d_pos++] = (i % 2) ? val : 0;
+
+        running_ADC_average += (adc_buff[a_pos++] << BIT_SHIFT);
+        running_ADC_average += (adc_buff[a_pos++] << BIT_SHIFT);
 	}
 }
 
-void algo_test_init(algo_func_t *algo_function) {
+void algo_test_init() {
 	ALGO_TAG = "ALGO_TEST";
 	adc_algo_size = ALGO_TEST_SIZE;
-	*algo_function = algo_test;
+	algo_function = algo_test; //from fad_defs.h
     running_ADC_average = 0x3FFFFFFF; //start less than halfay to max value
     }

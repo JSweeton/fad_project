@@ -6,4 +6,5 @@ idf_component_register(SRCS "fad_app_core.c"
                             "fad_algorithms/algo_test.c"
                             "fad_defs.h"
                             "fad_dac.c"
+                            "fad_timer.c"
                     INCLUDE_DIRS ".")

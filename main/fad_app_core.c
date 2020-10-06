@@ -11,12 +11,13 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
+
 #include "fad_app_core.h"
 #include "esp_log.h"
 #include "fad_defs.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 
 
 xTaskHandle fadTaskHandle;

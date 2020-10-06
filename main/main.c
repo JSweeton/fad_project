@@ -18,9 +18,14 @@
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_log.h"
+
 #include "fad_app_core.h"
 #include "fad_adc.h"
 #include "fad_dac.h"
+#include "fad_timer.h"
+
+#include "fad_algorithms/algo_white.c"
+#include "fad_algorithms/algo_test.c"
 
 
 /**
@@ -85,13 +90,13 @@ void app_main(void)
     fad_app_task_startup();
 
     /* Bluetooth device name, connection mode and profile set up */
-
+	
     ret = adc_init();
-
     ret = dac_init();
+	algo_test_init();
+	ret = adc_timer_init();
 
     ESP_ERROR_CHECK( ret );
-
     //heartbeat();
 
     if ( fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true ) {
