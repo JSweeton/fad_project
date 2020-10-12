@@ -5,7 +5,7 @@
  * Date: 9/17/2020
  *
  * Description:
- * This file initializes and handles functions for the DAC output
+ * This file initializes and handles functions for the DAC output. Need custom DAC function for quick DAC output.
  */
 
 #include <stdlib.h>

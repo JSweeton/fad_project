@@ -20,6 +20,8 @@
  * @brief White noise algorithm for ESP masker
  * @param adc_buff Buffer that points to the beginning of the ADC data
  * @param dac_buff [OUT] Buffer that points to the beggining of DAC data staged to be output to the DAC
+ * @param adc_pos Points to starting point of this algorithm chunk
+ * @param dac_pos Points to starting point of this algorithm chunk
  */
 void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos) {
 	uint16_t d_pos = dac_pos;
@@ -34,25 +36,36 @@ void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_
 
 	}
 	uint16_t diff = (max - min) >> 4;
-	dac_buff[d_pos] = 0;
-	uint16_t next_avg = ((adc_buffer[0] + adc_buffer[1]) >> 2);
+	dac_buff[d_pos] = diff >> 1;
+
+	//next_avg and cur_avg hold current and next set of multisampled ADC values, averaged together. Should be 12 bit unsigned
+	uint16_t next_avg = ((adc_buffer[adc_pos] + adc_buffer[adc_pos + 1]) >> 1); //bit shift 1 to limit output to 12 bit
+	uint16_t cur_avg;
+
 	for(int i = 0; i < (adc_algo_size / MULTISAMPLES) - 1; i++) {
 
-		uint16_t cur_avg = next_avg;
-		next_avg = (adc_buffer[(i + 1) * 2]);
+		cur_avg = next_avg;
+		
+		/** TODO: FIX AVERAGING SCHEME TO AVERAGE MULTISAMPLES FOR MORE THAN 2 **/
+		next_avg = (adc_buffer[adc_pos + (i * 2) + 2] + adc_buffer[adc_pos + (i * 2) + 3]) >> 1;
 
 		//to center input wave around 0 plus some, we effectively take discrete derivative, then discrete integral
-		
-		dac_buff[d_pos + 1] = (dac_buff[d_pos] + next_avg - cur_avg + (diff / 2));
 
-		if( dac_buff[d_pos + 1] > ( (diff >> 4) * 2 ) ) dac_buff[d_pos + 1] = (diff / 2);
+		int8_t discrete_diff = (int8_t) ((next_avg - cur_avg) >> 4);
+
+		uint8_t integral_sum = dac_buff[dac_pos + i] + discrete_diff;
+
+		
+		dac_buff[dac_pos + i + 1] = integral_sum;
+
+		if( dac_buff[dac_pos + i + 1] > (diff) )
+		 	dac_buff[dac_pos + i + 1] = (diff / 2);
  
 		//bitwise AND ADC_buff value (12-bit to 8-bit) by some random char. Should make some input-dependent noise.
-		dac_buff[d_pos + 1] = ((unsigned char)(esp_random()) & dac_buff[d_pos + 1]); 
+		//dac_buff[i + 1] = ((unsigned char)(esp_random()) & dac_buff[i + 1]); 
 		// dac_buff[d_pos] = output;
-		d_pos++; a_pos++;
 	}
-	ESP_LOGI(ALGO_TAG, "Algorithm Running, min: %4d, max: %4d, output: %3d", min, max, dac_buff[5]);
+	ESP_LOGI(ALGO_TAG, "Algorithm Running, diff: %4d, output: %3d", diff, dac_buff[5]);
 }
 
 /**

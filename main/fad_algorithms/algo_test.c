@@ -7,16 +7,15 @@
  * Description:
  * This file runs through a test algorithm for our masker. It always outputs a signal, but varies its
  * volume depending on the magnitude of the ADC input average.
- *
  */
 
 #include "fad_defs.h"
 #include "esp_log.h"
 
-//Usable portion of buffer to perform the algorithm, as other portions fill up
-#define ALGO_TEST_SIZE ADC_BUFFER_SIZE
-#define BIT_SHIFT 10 //To calculate bit shift, use ALGO_TEST_SIZE * max ADC input to find range of running_ADC_average; 
-                    //  need max value of ALGO_TEST_SIZE * adc_input to be 2 ^ 31
+/* Usable portion of buffer to perform the algorithm, as other portions fill up. Should always be at least half of buffer size. */
+#define ALGO_TEST_SIZE (ADC_BUFFER_SIZE / 2)
+//To calculate bit shift, use ALGO_TEST_SIZE * max ADC input to find range of running_ADC_average; 
+#define BIT_SHIFT 10
 
 uint32_t running_ADC_average;
 
@@ -24,6 +23,8 @@ uint32_t running_ADC_average;
  * @brief White noise algorithm for ESP masker
  * @param adc_buff Buffer that points to the beginning of the ADC data
  * @param dac_buff [OUT] Buffer that points to the beggining of DAC data staged to be output to the DAC
+ * @param adc_pos Points to starting point of this algorithm chunk
+ * @param dac_pos Points to starting point of this algorithm chunk
  */
 void algo_test(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos) {
     uint16_t d_pos = dac_pos;
@@ -44,6 +45,6 @@ void algo_test(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t
 void algo_test_init() {
 	ALGO_TAG = "ALGO_TEST";
 	adc_algo_size = ALGO_TEST_SIZE;
-	algo_function = algo_test; //from fad_defs.h
+	algo_function = algo_test; //fad_defs.h
     running_ADC_average = 0x3FFFFFFF; //start less than halfay to max value
     }

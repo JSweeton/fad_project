@@ -14,14 +14,15 @@
 
 
 
-/*
- * ADC Definitions
- */
+/* ADC Definitions */
 #define ADC_BUFFER_SIZE 1024    //Buffer size for holding ADC data. 
 #define MULTISAMPLES 2          //Number of ADC samples per DAC output
 #define DAC_BUFFER_SIZE (ADC_BUFFER_SIZE / MULTISAMPLES)  //Buffer size for holding staged DAC data. Hold one DAC sample for each ADC multisample
 #define ADC_CHANNEL ADC_CHANNEL_6
 
+/* Timer Definitions */
+#define TIMER_FREQ 80000
+#define ALARM_FREQ 4000 //Determines the frequency of ADC sampling and DAC output
 
 
 /*
@@ -44,8 +45,6 @@ typedef void (* fad_app_cb_t) (uint16_t event, void *param);
 uint16_t adc_algo_size; //determines the chunck size of ADC values fed to the algorithm, not accounting for multisampling
 char *ALGO_TAG;
 
-// 	Need a circular buffer for the adc input, as well as a tracker for the
-//  current position in the queue
 uint16_t *adc_buffer;
 uint8_t *dac_buffer;
 uint16_t adc_buffer_pos;

@@ -24,11 +24,8 @@
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
-#define TIMER_FREQ 80000
 #define CLOCK_DIVIDER (80000000 / TIMER_FREQ) //divider required to make timer frequency correct
-#define ALARM_FREQ 4000 //Determines the frequency of ADC sampling and DAC output
 #define ALARM_STEP_SIZE (TIMER_FREQ / ALARM_FREQ)
-
 #define TASK_STACK_DEPTH 2048
 
 
@@ -48,8 +45,7 @@ static const char *TIMER_TAG = "TIMER";
  */
 void IRAM_ATTR timer_intr_handler(void *arg) {
 	
-	timer_spinlock_take(TIMER_GROUP);
-	BaseType_t yield = false;
+	timer_spinlock_take(TIMER_GROUP);	//At beginning and end, Timer API asks us to enclose ISR with _take and _give to function properly
 
 	//advance buffer, resetting to zero at max buffer position
 	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
@@ -63,6 +59,8 @@ void IRAM_ATTR timer_intr_handler(void *arg) {
 	if (adc_buffer_pos % adc_algo_size == 0) {
 		adc_buffer_pos_copy = adc_buffer_pos; //these copies provide a stable reference for the algorithm to work on
 		dac_buffer_pos_copy = dac_buffer_pos;
+
+		BaseType_t yield = false;
 		xSemaphoreGiveFromISR(alarmSemaphoreHandle, &yield);
 	}
 
@@ -73,14 +71,17 @@ void IRAM_ATTR timer_intr_handler(void *arg) {
 	timer_group_enable_alarm_in_isr(TIMER_GROUP, TIMER_NUMBER);
 
 	timer_spinlock_give(TIMER_GROUP);
-	//if(yield) taskYIELD();
-
 }
 
+/**
+ * @brief FreeRTOS task that runs when the buffer is ready for output. 
+ * Adds the appropriate function to the ADC task handler.
+ * 
+ * @param params [out] required as part of the task function definition
+ */
 static void alarm_task(void *params) {
 
 	for(;;) {
-
 		xSemaphoreTake(alarmSemaphoreHandle, portMAX_DELAY);
 
 		adc_evt_params params = {
@@ -88,9 +89,8 @@ static void alarm_task(void *params) {
 			.buff_pos.dac_pos = dac_buffer_pos_copy,
 		};
 
-
 		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) &params, sizeof(adc_evt_params), NULL);
-		ESP_LOGI(TIMER_TAG, "ADC val: %4u Outputting: %4u", adc_buffer[ADC_BUFFER_SIZE - 1], dac_buffer[0]);
+		ESP_LOGI(TIMER_TAG, "ADC val: %4u Outputting: %4u", adc_buffer[1], dac_buffer[1]);
 	}
 
 	vTaskDelete(alarmTaskHandle);
@@ -125,7 +125,7 @@ esp_err_t adc_timer_init(void) {
 	xTaskCreate(alarm_task, "Interrupt_Alarm_Task_Handler", TASK_STACK_DEPTH,
 				0, configMAX_PRIORITIES - 3, &alarmTaskHandle);
 
-	if(err) ESP_LOGI(TIMER_TAG, "Error");
+	if (err) ESP_LOGI(TIMER_TAG, "Error");
 
 	return err;
 }

@@ -50,30 +50,30 @@ void fad_hdl_stack_evt(uint16_t evt, void *params);
 void fad_hdl_main_evt(uint16_t evt, void *params);
 
 
-xTimerHandle xHeartbeatHandle;	//!	Handle for heartbeat timer
-void * xHeartbeatId;			//!	ID for heartbeat timer
+// xTimerHandle xHeartbeatHandle;	//!	Handle for heartbeat timer
+// void * xHeartbeatId;			//!	ID for heartbeat timer
 
-/**
- * @brief Heartbeat timer handler called whenever timer goes off, adds event to the task queue
- * @param xTimer
- */
-static void vHeartbeatHandler(xTimerHandle xTimer) {
+// /**
+//  * @brief Heartbeat timer handler called whenever timer goes off, adds event to the task queue
+//  * @param xTimer
+//  */
+// static void vHeartbeatHandler(xTimerHandle xTimer) {
 
-	if ( fad_app_work_dispatch(fad_hdl_main_evt, FAD_HEARTBEAT_EVT, NULL, 0, NULL) != true ) {
-		ESP_LOGW(FAD_TAG, "Couldn't post heartbeat");
-	}
-}
+// 	if ( fad_app_work_dispatch(fad_hdl_main_evt, FAD_HEARTBEAT_EVT, NULL, 0, NULL) != true ) {
+// 		ESP_LOGW(FAD_TAG, "Couldn't post heartbeat");
+// 	}
+// }
 
-/**
- * @brief Initializes the heartbeat timer used for periodic tasks
- */
-static void heartbeat() {
-	xHeartbeatHandle = xTimerCreate("heartbeat", 100, pdTRUE, (void *) 0, vHeartbeatHandler);
+// /**
+//  * @brief Initializes the heartbeat timer used for periodic tasks
+//  */
+// static void heartbeat() {
+// 	xHeartbeatHandle = xTimerCreate("heartbeat", 100, pdTRUE, (void *) 0, vHeartbeatHandler);
 
-	if ( xTimerStart(xHeartbeatHandle, portMAX_DELAY) != pdPASS ) {
-		ESP_LOGW(FAD_TAG, "Couldn't start timer");
-	}
-}
+// 	if ( xTimerStart(xHeartbeatHandle, portMAX_DELAY) != pdPASS ) {
+// 		ESP_LOGW(FAD_TAG, "Couldn't start timer");
+// 	}
+// }
 
 void app_main(void)
 {
@@ -88,17 +88,7 @@ void app_main(void)
 
     /* create application task */
     fad_app_task_startup();
-
-    /* Bluetooth device name, connection mode and profile set up */
 	
-    ret = adc_init();
-    ret = dac_init();
-	algo_test_init();
-	ret = adc_timer_init();
-
-    ESP_ERROR_CHECK( ret );
-    //heartbeat();
-
     if ( fad_app_work_dispatch(fad_hdl_stack_evt, FAD_APP_EVT_STACK_UP, NULL, 0, NULL) != true ) {
     	ESP_LOGW(FAD_TAG, "Couldn't initiate stack");
     }
@@ -113,10 +103,27 @@ void app_main(void)
 void fad_hdl_main_evt(uint16_t evt, void *params) {
 
 	switch (evt) {
-	case (FAD_HEARTBEAT_EVT): {
-		ESP_LOGI(FAD_TAG, "Heartbeat evt");
+	default:
+		ESP_LOGI(FAD_TAG, "Unknown Event");
+
 	}
+}
+
+
+void stack_init(void) {
+	esp_err_t ret;
+	ret = adc_init(); 		//fad_adc.h
+    ret = dac_init();		//fad_dac.h
+	algo_white_init();		//fad_algorithms/algo_<func>.h
+	ret = adc_timer_init();	//fad_timer.h
+
+	if ( adc_timer_start() == ESP_OK ) {
+		ESP_LOGI(FAD_TAG, "Started Timer");
 	}
+
+    ESP_ERROR_CHECK( ret );
+
+	return;
 }
 
 
@@ -129,9 +136,7 @@ void fad_hdl_stack_evt(uint16_t evt, void *params) {
 	switch (evt) {
 	case (FAD_APP_EVT_STACK_UP):
 		ESP_LOGI(FAD_TAG, "Initializing program:");
-		if ( adc_timer_start() == ESP_OK ) {
-			ESP_LOGI(FAD_TAG, "Started Timer");
-		}
+		stack_init();
 		break;
 
 	default:
