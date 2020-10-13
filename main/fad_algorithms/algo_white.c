@@ -36,7 +36,7 @@ void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_
 
 	}
 	uint16_t diff = (max - min) >> 4;
-	dac_buff[d_pos] = diff >> 1;
+	dac_buff[d_pos] = 0x7F;
 
 	//next_avg and cur_avg hold current and next set of multisampled ADC values, averaged together. Should be 12 bit unsigned
 	uint16_t next_avg = ((adc_buffer[adc_pos] + adc_buffer[adc_pos + 1]) >> 1); //bit shift 1 to limit output to 12 bit
@@ -49,20 +49,20 @@ void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_
 		/** TODO: FIX AVERAGING SCHEME TO AVERAGE MULTISAMPLES FOR MORE THAN 2 **/
 		next_avg = (adc_buffer[adc_pos + (i * 2) + 2] + adc_buffer[adc_pos + (i * 2) + 3]) >> 1;
 
-		//to center input wave around 0 plus some, we effectively take discrete derivative, then discrete integral
+		// //to center input wave around 0 plus some, we effectively take discrete derivative, then discrete integral
 
 		int8_t discrete_diff = (int8_t) ((next_avg - cur_avg) >> 4);
 
-		uint8_t integral_sum = dac_buff[dac_pos + i] + discrete_diff;
+		// uint8_t integral_sum = dac_buff[dac_pos + i] + discrete_diff;
 
 		
-		dac_buff[dac_pos + i + 1] = integral_sum;
+		// dac_buff[dac_pos + i + 1] = integral_sum;
 
-		if( dac_buff[dac_pos + i + 1] > (diff) )
-		 	dac_buff[dac_pos + i + 1] = (diff / 2);
+		// if( dac_buff[dac_pos + i + 1] > (diff) )
+		//  	dac_buff[dac_pos + i + 1] = (diff / 2);
+		dac_buff[dac_pos + i + 1] = 0x7F + (((char)esp_random() * discrete_diff) >> 8);
  
 		//bitwise AND ADC_buff value (12-bit to 8-bit) by some random char. Should make some input-dependent noise.
-		//dac_buff[i + 1] = ((unsigned char)(esp_random()) & dac_buff[i + 1]); 
 		// dac_buff[d_pos] = output;
 	}
 	ESP_LOGI(ALGO_TAG, "Algorithm Running, diff: %4d, output: %3d", diff, dac_buff[5]);

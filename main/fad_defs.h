@@ -15,14 +15,14 @@
 
 
 /* ADC Definitions */
-#define ADC_BUFFER_SIZE 1024    //Buffer size for holding ADC data. 
+#define ADC_BUFFER_SIZE 2048    //Buffer size for holding ADC data. 
 #define MULTISAMPLES 2          //Number of ADC samples per DAC output
 #define DAC_BUFFER_SIZE (ADC_BUFFER_SIZE / MULTISAMPLES)  //Buffer size for holding staged DAC data. Hold one DAC sample for each ADC multisample
 #define ADC_CHANNEL ADC_CHANNEL_6
 
 /* Timer Definitions */
 #define TIMER_FREQ 80000
-#define ALARM_FREQ 4000 //Determines the frequency of ADC sampling and DAC output
+#define ALARM_FREQ 16000 //Determines the frequency of ADC sampling and DAC output
 
 
 /*
