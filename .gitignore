@@ -1,11 +1,5 @@
-#FAD GIT Ignore File 
-
-#Ignore all build files
-build/**
-
-#ignore custom .bat files
-flash.bat
 init.bat
-
-#ignore editor files
+flash.bat
+build
 .vscode
+ 
