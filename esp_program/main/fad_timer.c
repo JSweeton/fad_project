@@ -16,6 +16,7 @@
 #include "freertos/semphr.h"
 #include "driver/adc.h"
 #include "esp_log.h"
+#include "driver/uart.h"
 
 #include "fad_defs.h"
 #include "fad_adc.h"
@@ -47,15 +48,30 @@ void IRAM_ATTR timer_intr_handler(void *arg) {
 	
 	timer_spinlock_take(TIMER_GROUP);	//At beginning and end, Timer API asks us to enclose ISR with _take and _give to function properly
 
+	#ifdef UART_ADC
+	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
+	uint32_t length = uart_read_bytes(UART_NUM_0, adc_buffer + adc_buffer_pos, 1, 10);
+
+	#else
 	//advance buffer, resetting to zero at max buffer position
 	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
 	adc_buffer[adc_buffer_pos] = local_adc1_read(ADC_CHANNEL);
 
+	#endif /* ifdef UART_ADC */
+
+	#ifdef UART_DAC
+	if (adc_buffer_pos % MULTISAMPLES == 0) { //wait to increment dac buffer and output only when the multisample number of ADC samples have been taken.
+		dac_buffer_pos = (dac_buffer_pos + 1) % DAC_BUFFER_SIZE;
+		uart_write_bytes(UART_NUM_0, dac_buffer + dac_buffer_pos, 1);
+
+	#else
 	if (adc_buffer_pos % MULTISAMPLES == 0) { //wait to increment dac buffer and output only when the multisample number of ADC samples have been taken.
 		dac_buffer_pos = (dac_buffer_pos + 1) % DAC_BUFFER_SIZE;
 		dac_output_value(dac_buffer[dac_buffer_pos]);
 	}
-	
+
+	#endif /* ifdef UART_DAC */
+
 	if (adc_buffer_pos % adc_algo_size == 0) {
 		adc_buffer_pos_copy = adc_buffer_pos; //these copies provide a stable reference for the algorithm to work on
 		dac_buffer_pos_copy = dac_buffer_pos;
@@ -90,7 +106,7 @@ static void alarm_task(void *params) {
 		};
 
 		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) &params, sizeof(adc_evt_params), NULL);
-		ESP_LOGI(TIMER_TAG, "ADC val: %4u Outputting: %4u", adc_buffer[1], dac_buffer[1]);
+		// ESP_LOGI(TIMER_TAG, "ADC val: %4u Outputting: %4u", adc_buffer[1], dac_buffer[1]);
 	}
 
 	vTaskDelete(alarmTaskHandle);

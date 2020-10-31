@@ -65,7 +65,7 @@ void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_
 		//bitwise AND ADC_buff value (12-bit to 8-bit) by some random char. Should make some input-dependent noise.
 		// dac_buff[d_pos] = output;
 	}
-	ESP_LOGI(ALGO_TAG, "Algorithm Running, diff: %4d, output: %3d", diff, dac_buff[5]);
+	// ESP_LOGI(ALGO_TAG, "Algorithm Running, diff: %4d, output: %3d", diff, dac_buff[5]);
 }
 
 /**

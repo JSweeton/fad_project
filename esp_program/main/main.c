@@ -18,6 +18,7 @@
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "driver/uart.h"
 
 #include "fad_app_core.h"
 #include "fad_adc.h"
@@ -120,7 +121,9 @@ void stack_init(void) {
 	if ( adc_timer_start() == ESP_OK ) {
 		ESP_LOGI(FAD_TAG, "Started Timer");
 	}
-
+	if (!uart_is_driver_installed(UART_NUM_0)) {
+		ESP_LOGI(FAD_TAG, "Uart NOT installed by default");
+	}
     ESP_ERROR_CHECK( ret );
 
 	return;

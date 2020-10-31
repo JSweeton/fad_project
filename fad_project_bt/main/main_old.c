@@ -230,7 +230,7 @@ static void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param)
         return;
     }
 
-    /* search for device named "Bean's Soundsport" in its extended inqury response */
+    /* search for device named "ESP_SPEAKER" in its extended inqury response */
     if (eir) {
         get_name_from_eir(eir, s_peer_bdname, NULL);
         if (strcmp((char *)s_peer_bdname, "Bean's Soundsport") != 0) {

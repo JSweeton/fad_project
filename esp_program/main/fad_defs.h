@@ -12,7 +12,9 @@
 #include <stdlib.h>
 #include "esp_system.h"
 
-
+/* Project Mode */
+// #define UART_ADC /* Uncomment to use UART as ADC input */ 
+// #define UART_DAC /* Uncomment to output DAC to UART */
 
 /* ADC Definitions */
 #define ADC_BUFFER_SIZE 2048    //Buffer size for holding ADC data. 
@@ -31,6 +33,11 @@
 
 /**
  * @brief     algorithm function
+ * 
+ * @param adc_buff Pointer to beginning of ADC buffer (also a global)
+ * @param dac_buff Pointer to beginning of DAC buffer (also a global)
+ * @param adc_pos Integer index of algorithm beginning location in ADC buffer
+ * @param adc_pos Integer index of algorithm beginning location in ADC buffer
  */
 typedef void (* algo_func_t) (uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos);
 
