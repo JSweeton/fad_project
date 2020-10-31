@@ -13,7 +13,6 @@
 const char TEST_TAG[] = "FAD_TEST";
 
 void app_main(void) {
-    ESP_LOGI(TEST_TAG, "Configuring UART parameters");
 
     const int uart_num = UART_NUM_0;
     uart_config_t uart_config = {
@@ -26,12 +25,17 @@ void app_main(void) {
     };
     // Configure UART parameters
     ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
-    char *buffer = malloc(50 * sizeof(char));
+    // ESP_LOGI(TEST_TAG, "Configuring UART parameters");
+
+    char *buffer = (char *)malloc(50 * sizeof(char));
+    int written_bytes = 0;
+
     while(1) {
+        vTaskDelay(10);
         int read_bytes = uart_read_bytes(uart_num, buffer, 1, 10);
-        if(buffer[0] > 0) {
-           if(uart_write_bytes(uart_num, buffer, read_bytes) == -1) {
-           }
+
+        if (read_bytes != -1) {
+            written_bytes = uart_write_bytes(uart_num, buffer, 1);
         }
     }
 }
