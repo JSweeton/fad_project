@@ -2,3 +2,7 @@ flash.bat
 init.bat
 .vscode
 build
+flash.sh
+init.sh
+monitor.sh
+
