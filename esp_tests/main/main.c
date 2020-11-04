@@ -11,8 +11,12 @@
 
 #include "driver/uart.h"
 
+#define BUF_SIZE (1024)
+#define RD_BUF_SIZE (BUF_SIZE)
+
 const char TEST_TAG[] = "FAD_TEST";
 QueueHandle_t uart_handle;
+const int uart_num = UART_NUM_0;
 
 
 int write_to_uart(char *data) {
@@ -23,60 +27,62 @@ int write_to_uart(char *data) {
     }
     
     return written_bytes;
-}
-void app_main(void) {
 
-    const int uart_num = UART_NUM_0;
+}
+
+void init_uart_0(int baud_rate) {
+    
     uart_config_t uart_config = {
-        .baud_rate = 115200,
+        .baud_rate = baud_rate,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB,
     };
+
     // Configure UART parameters
-    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
-    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-    ESP_ERROR_CHECK(uart_driver_install(uart_num, 256, 256, 10, &uart_handle, 0));
-    ESP_LOGI(TEST_TAG, "Beginning initialization");
-    char *in_buffer = (char *)malloc(50 * sizeof(char));
-    char *out_buffer = (char *)malloc(50 * sizeof(char));
-    assert(in_buffer);
-    // ESP_LOGI(TEST_TAG, "Successfully initialized");
-    assert(out_buffer);
-    ESP_LOGI(TEST_TAG, "Successfully initialized");
+    esp_err_t err = uart_param_config(uart_num, &uart_config);
+    err = uart_set_pin(uart_num, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    err = uart_driver_install(uart_num, 256, 256, 10, &uart_handle, 0);
 
-    //give some cool down time
-    vTaskDelay(100);
-    int read_bytes = uart_read_bytes(uart_num, in_buffer, 45, 100);
+    ESP_ERROR_CHECK(err);
+
+}
+
+void serial_read_task(void *params) {
+
+    char *data = (char *)malloc(sizeof(char) * RD_BUF_SIZE);
+    uart_event_t event;
+
+    for(;;) {
+        if (xQueueReceive(uart_handle, (void *)&event, (portTickType)portMAX_DELAY)) {
+            bzero(data, RD_BUF_SIZE);
+            switch (event.type) {
+
+                case UART_DATA:
+                    uart_read_bytes(uart_num, data, event.size, 2);
+                    ESP_LOGI(TEST_TAG, "[DATA]: %s", data);
+                    break;
+
+                case UART_BUFFER_FULL:
+                    ESP_LOGI(TEST_TAG, "[BUFFER_FULL]:");
+                    break;
+                
+                default:
+                    ESP_LOGI(TEST_TAG, "[NOT HANDLED]: %d", event.type);
+            }
+        }
+    }
     
-    char output[50];
+    free(data);
+    data = NULL;
+    vTaskDelete(NULL);
+}
+void app_main(void) {
 
-    if(strlen(in_buffer) > 0) {
-        sprintf(output, "0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", 
-                        in_buffer[0], in_buffer[1], in_buffer[2], in_buffer[3], in_buffer[4], in_buffer[5], in_buffer[6], in_buffer[7]);
-        ESP_LOGI(TEST_TAG, "Read msg, num: %s", output);
-    } 
+    init_uart_0(115200);
 
-    ESP_LOGI(TEST_TAG, "Attempted read");
-    out_buffer[0] = 'y';
-    char msg[50];   
-    // sprintf(msg, "This is my test. Please hear my prayers.\n");
-    // int written_bytes = write_to_uart(msg);
-    // ESP_LOGI(TEST_TAG, "Wrote %d bytes", written_bytes);
-
-
-
-    // int written_bytes = 0;
-    // while(1) {
-    //     vTaskDelay(10);
-    //     int read_bytes = uart_read_bytes(uart_num, in_buffer, 1, 10);
-
-    //     if (read_bytes != -1) {
-    //         // out_buffer[0] = in_buffer[0];
-    //         ESP_LOGI(TEST_TAG, "Read a byte!");
-    //         // written_bytes = uart_write_bytes(uart_num, out_buffer, 1);
-    //     }
-    // }
+    TaskHandle_t uart_read_task;
+    xTaskCreate(serial_read_task, "Uart0 Queue Task", 256, NULL, configMAX_PRIORITIES - 3, &uart_read_task);
 }

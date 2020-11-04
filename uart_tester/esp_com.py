@@ -2,6 +2,7 @@ import serial
 import keyboard
 import typing
 from sys import platform
+import time
 
 key_input = 0
 
@@ -10,8 +11,20 @@ def set_key_input(KeyEvent: keyboard.KeyboardEvent):
 
     key_input = KeyEvent.name 
 
-    # debug
-    # print(key_input)
+
+def do_every(period,f,*args):
+    def g_tick():
+        t = time.time()
+        while True:
+            t += period
+            yield max(t - time.time(),0)
+    g = g_tick()
+    while True:
+        time.sleep(next(g))
+        f(*args)
+
+def every_1_ms():
+    print(time.time())
 
 def print_input(com_instance: serial.Serial):
 
@@ -30,10 +43,12 @@ def print_input(com_instance: serial.Serial):
         #     output_bytes = bytes(output_string, 'utf-8')  
         #     com_instance.write(output_bytes) 
 
-def main():
+def get_com_port():
+    com_port = ""
+
     if platform == "linux" or platform == "linux2":
         com_port = "/dev/ttyUSB0"
-        print(f'Running linux system, com port is {com_port}')
+        print(f'Running linux system, com port is {com_port}') 
     elif platform == "darwin":
         com_port = '' #not sure
         print(f'Running MAC, com port is {com_port}')
@@ -41,21 +56,19 @@ def main():
         com_port = "COM5"
         print(f'Running windows system, com port is {com_port}')
 
-    # keyboard.on_press_key("q", lambda _: set_key_input('q'))
-    # keyboard.on_press_key("w", lambda _: set_key_input('w'))
-    # keyboard.on_press_key("e", lambda _: set_key_input('e'))
-    # keyboard.on_press_key("r", lambda _: set_key_input('r'))
+    return com_port
+
+def main():
 
     keyboard.hook(set_key_input)
 
     try:
-        esp_com = serial.Serial(com_port, baudrate=115200)
+        esp_com = serial.Serial(get_com_port(), baudrate=115200)
         print_input(esp_com)
     except serial.SerialException:
-        print("COM port not opened")
+        print("Serial Opening Failed")
 
-    while(True):
-       sudo = True
+# main()
 
-main()
 
+do_every(.001,every_1_ms)

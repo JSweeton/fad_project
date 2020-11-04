@@ -54,7 +54,7 @@ void IRAM_ATTR timer_intr_handler(void *arg) {
 
 	#else
 	//advance buffer, resetting to zero at max buffer position
-	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE;
+	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE; //adc_buffer_pos is global
 	adc_buffer[adc_buffer_pos] = local_adc1_read(ADC_CHANNEL);
 
 	#endif /* ifdef UART_ADC */
