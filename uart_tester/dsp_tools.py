@@ -2,53 +2,16 @@ import math
 import numpy as np
 from scipy import signal
 import matplotlib.pyplot as plt
-from random import random
 import sounddevice as sd
-import time
 from audio2numpy import open_audio
 from matplotlib.lines import Line2D
 
 
 size = 4800
 
-
-
-#A class that holds the signal arrays and their associated figure for a certain
-#set of axes.
-#while figure is being drawn, fill axes array with signal data. Init the instance with its figure.
-class fig_signals:
-
-    def __init__(self, figure):
-        self.fig = figure
-        self.axe_array = []
-        self.signal_array = []
-        print(self.fig)
-
-    def add_axes(self, axe):
-        self.axe_array.append(axe)
-
-    def add_signal(self, signal):
-        self.signal_array.append(signal)
-
-
-def enter_axes(event):
-    event.canvas.draw()
-    for fig_signal in all_fig_signals:
-        if(event.canvas.figure == fig_signal.fig):
-            for i in range(len(fig_signal.axe_array)):
-                if(event.inaxes == fig_signal.axe_array[i]):
-                    print('playing audio...')
-                    sd.stop()
-                    sd.play(fig_signal.signal_array[i], 48000)
-    
-
 def normalize(array):
-        #array = array / math.sqrt(np.sum(array**2))
-        array = array / np.sum(array)
-        return array
-
-
-
+    array = array / np.sum(array)
+    return array
 
 def normal_wave(in_pad, vals):
     out_signal = np.zeros(size)
@@ -74,10 +37,7 @@ def square_wave(wave_width, length = size):
         else:
             x += wave_width
     return output - 0.5
-            
 
-        
-    
 def convolve(in_signal, impulse):
 
     out_signal = np.zeros(len(in_signal))
@@ -88,13 +48,12 @@ def convolve(in_signal, impulse):
                 out_signal[x + y] += in_signal[x] * impulse[y]
     return out_signal
 
-
-
 def polarize(complex_array):
     return abs(complex_array), np.angle(complex_array)
 
-# Compares the graphs of both the original given signals and their FFT information
 def fft_compare(*signals, inverse = False, phase = False, title = ''):
+    '''Compares the graphs of both the original given signals and their FFT information'''
+
     LINE_WIDTH = 0.5
     num_args = len(signals)
     
@@ -132,14 +91,16 @@ def fft_compare(*signals, inverse = False, phase = False, title = ''):
             axes[2, x].plot(half_vals, fft_vals.imag, linewidth = LINE_WIDTH)
 
             
-# Creates an inverse impulse of the input signal, centered around the center value
 def impulse_inverse(array, center = 0):
+    '''Creates an inverse impulse of the input signal, centered around the center value'''
     array = array * -1
     array[center] += 1
     return array
 
-# Creates a low pass filter of desired 
 def low_pass_create(num_vals, length = size, filter_type = 'square'):
+    '''Creates a low pass filter of desired filter width as num_vals and total length
+        filter_type: square, exp, or sinc''' 
+
     # A square filter of length num_vals
     if filter_type == 'square':
         output = np.concatenate((np.ones(num_vals), np.zeros(length - num_vals)))
@@ -166,13 +127,13 @@ def low_pass_create(num_vals, length = size, filter_type = 'square'):
 
     return normalize(output)
 
-# Applies a chosen low pass filter of length num to an input signal. If a custom filter is
-# provided, num represents the 
 def low_pass(signal, num, filter_type = 'square', offset = 0, custom_filter = None):
+    ''' Applies a chosen low pass filter of length num to an input signal. If a custom filter is
+        provided, num is not used '''
 
     if custom_filter:
         #in this case, num is useless
-        np.convolve(signal, custom_filter[0])[offset:offset + len(signal)]
+        np.convolve(signal, custom_filter)[offset:offset + len(signal)]
 
     elif filter_type == 'square':
         return np.convolve(signal, low_pass_create(num, len(signal)))[offset:offset + len(signal)]
@@ -187,42 +148,6 @@ def low_pass(signal, num, filter_type = 'square', offset = 0, custom_filter = No
 def high_pass(signal, num, filter_type = 'square', offset = 0, custom_filer = None):
     return (signal, impulse_inverse(low_pass_create(num, len(signal))))[:len(signal)]
     
-
-def de_echo(echo_wave, echo_distance):
-    output_wave = np.copy(echo_wave)
-    print(len(echo_wave) - echo_distance)
-    for i in range(len(echo_wave) - echo_distance):
-        output_wave[i + echo_distance] = output_wave[i + echo_distance] - output_wave[i]
-    return output_wave
-
-def fft_convolve(sig1, sig2):
-    sig1_len = len(sig1)
-    sig2_len = len(sig2)
-    output = np.zeros(sig1_len + sig2_len - 1)
-    i = 1
-    while sig2_len > i:
-        i = i * 2
-
-    sig1_new = np.concatenate((sig1, np.zeros(sig2_len - 1)))
-    sig2_new = np.concatenate((sig2, np.zeros(i - sig2_len)))
-    sig2_fft = np.fft.rfft(sig2_new)
-
-    j = 0
-    tracker = []
-    while j < sig1_len:
-        sig = np.concatenate((sig1_new[j:j+(i // 2)], np.zeros(i // 2)))
-        sig_combo = np.fft.rfft(sig) * sig2_fft
-        combo_irfft = np.fft.irfft(sig_combo)
-        tracker.append(combo_irfft)
-        
-        for k in range(i):
-            output[j + k] = output[j + k] + combo_irfft[k]
-        
-        j = j + i//2
-        
-    return output, tracker
-    
-
 def get_song(time):
 
     fp = 'C:/ffmpeg/test_song_3.wav'
@@ -247,7 +172,7 @@ def signal_feeder(s, pll_func, buff_size = 1):
                 output.append(temp[j])
         return output
 
-def plot(signals, labels = 0, title = "Figure"):
+def plot(signals, labels: str = 0, title: str = "Figure"):
     fig, ax = plt.subplots()
     for s in signals:
         ax.plot(s)
@@ -263,26 +188,16 @@ def play(s):
 def show():
     plt.show()
     
-#-------------------BEGIN PROGRAM-----------------------------#
 
-
-#np.sum(array)
-#my_array.sum()
-
-#max()
-#min()
-#len(a)
-#np.array([1, 3, 4], dtype = 'complex' or 'float32')
-
-#np.arange(beginning = 0, end, step_size = 1)
-#array = np.random.random(size)
-#np.linspace(beginning, end, total_numbers) #inclusive
-#irfft, ifft, etc. 
 
 def main():
+    song = 100000 * get_song(30)
     print ("working")
-    return
-
+    print(song[0:100])
+    # sd.play(song)
+    wave = square_wave(500, 500000)
+    sd.play(wave)
+    print("done")
 
 if __name__ == "__main__":
     main()

@@ -3,45 +3,76 @@ import keyboard
 import typing
 from sys import platform
 import time
+import dsp_tools
 
-key_input = 0
+BUFFER_SIZE = 512 
+class ESP_Com(serial.Serial):
+    '''A serial UART for the ESP32. Based off of the PySerial Serial Class'''
 
-def set_key_input(KeyEvent: keyboard.KeyboardEvent):
-    global key_input
+    def __init__(self, port: str, baudrate: int = 115200, default_data = 0):
+        super().__init__(port, baudrate=baudrate, timeout=0.01) 
+        self.output_buffer = []
+        self.input_buffer = BUFFER_SIZE * [0]
+        self.default_data = default_data
+        self.monitor_is_live = False
 
-    key_input = KeyEvent.name 
+    @property
+    def default_data(self):
+        return self._default_data 
+        
+    @default_data.setter
+    def default_data(self, data):
+        self._default_data = data
 
+    def write(self, data):
+        if not self.monitor_is_live:
+            print("Written data before monitor began.")
+            return
 
-def do_every(period,f,*args):
-    def g_tick():
-        t = time.time()
-        while True:
-            t += period
-            yield max(t - time.time(),0)
-    g = g_tick()
-    while True:
-        time.sleep(next(g))
-        f(*args)
+        self.output_buffer = data
 
-def every_1_ms():
-    print(time.time())
+    def read(self, size):
+        input_bytes = super().read(size)
+        return input_bytes
 
-def print_input(com_instance: serial.Serial):
+    def setup_key_input(self):
+        keyboard.hook(self.key_handler)    
 
-    print("Successfully opened com")
+    def _parse_key(self, key_name: str):
+        # TODO: Handle key input, do something
+        if key_name == 'w':
+            print(key_name)
+            self.write(self.default_data)
+        elif key_name =='e':
+            self.end_monitor()
+        else:
+            print(f'Unhandled key: {key_name}')
 
-    while True:
-        global key_input
-        input_bytes = com_instance.read()
-        print(input_bytes.decode(), end='')
-        # for now, continually output a 'y'
-        output_bytes = bytes('yyyyy\n', 'utf-8')
-        com_instance.write(output_bytes)
-       # if key_input != 0:
-        #     output_string = key_input
-        #     key_input = 0
-        #     output_bytes = bytes(output_string, 'utf-8')  
-        #     com_instance.write(output_bytes) 
+    def key_handler(self, KeyEvent: keyboard.KeyboardEvent):
+        self._parse_key(KeyEvent.name)
+
+    def end_monitor(self):
+        self.break_monitor = True
+
+    def begin_monitor(self):            
+        print("Beginning monitor readings")
+        self.monitor_is_live = True
+        self.break_monitor = False
+
+        while (not self.break_monitor):
+            read_bytes = self.read(1)
+
+            try:
+                read_string = read_bytes.decode()
+            except UnicodeDecodeError:
+                read_string = "[ERROR]: Invalid Input"
+                        
+            print(read_string, end="end")
+
+            #Check for new data to write
+            if len(self.output_buffer) > 0:
+                super().write(self.output_buffer)
+                self.output_buffer = [] 
 
 def get_com_port():
     com_port = ""
@@ -60,15 +91,18 @@ def get_com_port():
 
 def main():
 
-    keyboard.hook(set_key_input)
-
-    try:
-        esp_com = serial.Serial(get_com_port(), baudrate=115200)
-        print_input(esp_com)
-    except serial.SerialException:
-        print("Serial Opening Failed")
-
-# main()
+    serial_port = get_com_port()
+    com = ESP_Com(serial_port, baudrate=115200)
 
 
-do_every(.001,every_1_ms)
+    my_string = "Hello World. This is Corey Bean"
+    my_string = my_string * 10
+
+    com.setup_key_input()
+    com.default_data = bytearray(my_string, 'utf-8')
+    com.begin_monitor()
+
+main()
+
+
+# do_every(.001,every_1_ms)
