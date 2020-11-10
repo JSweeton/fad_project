@@ -9,6 +9,9 @@ BUFFER_SIZE = 512
 class ESP_Com(serial.Serial):
     '''A serial UART for the ESP32. Based off of the PySerial Serial Class'''
 
+    PAYLOAD_HEADER = bytearray("Begin Payload Transmission", 'utf-8')
+    PAYLOAD_FOOTER = bytearray("End Payload Transmission", 'utf-8')
+
     def __init__(self, port: str, baudrate: int = 115200, default_data = 0):
         super().__init__(port, baudrate=baudrate, timeout=0.01) 
         self.output_buffer = []
@@ -24,10 +27,21 @@ class ESP_Com(serial.Serial):
     def default_data(self, data):
         self._default_data = data
 
+    @property
+    def payload_data(self):
+        return self._payload_data 
+        
+    @payload_data.setter
+    def payload_data(self, data):
+        self._payload_data = data
+       
     def write(self, data):
         if not self.monitor_is_live:
             print("Written data before monitor began.")
             return
+
+        while (len(self.output_buffer) > 0):
+            pass
 
         self.output_buffer = data
 
@@ -45,17 +59,25 @@ class ESP_Com(serial.Serial):
             self.write(self.default_data)
         elif key_name =='e':
             self.end_monitor()
+        elif key_name =='b':
+            self.begin_payload_transmission()
         else:
             print(f'Unhandled key: {key_name}')
 
     def key_handler(self, KeyEvent: keyboard.KeyboardEvent):
         self._parse_key(KeyEvent.name)
 
+    def begin_payload_transmission(self):
+        print("Beginning transmission...")
+        self.write(self.PAYLOAD_HEADER)
+        self.write(self.payload_data)
+        self.write(self.PAYLOAD_FOOTER)
+
     def end_monitor(self):
         self.break_monitor = True
 
     def begin_monitor(self):            
-        print("Beginning monitor readings")
+        print("Beginning monitor readings...")
         self.monitor_is_live = True
         self.break_monitor = False
 
@@ -65,9 +87,9 @@ class ESP_Com(serial.Serial):
             try:
                 read_string = read_bytes.decode()
             except UnicodeDecodeError:
-                read_string = "[ERROR]: Invalid Input"
+                read_string = "\n[ERROR]: Invalid Input"
                         
-            print(read_string, end="end")
+            print(read_string, end="")
 
             #Check for new data to write
             if len(self.output_buffer) > 0:
@@ -94,15 +116,12 @@ def main():
     serial_port = get_com_port()
     com = ESP_Com(serial_port, baudrate=115200)
 
-
-    my_string = "Hello World. This is Corey Bean"
-    my_string = my_string * 10
-
+    com.payload_data = bytearray([10, 43, 2, 1])
     com.setup_key_input()
-    com.default_data = bytearray(my_string, 'utf-8')
     com.begin_monitor()
+    
+    com.begin_payload_transmission()
 
 main()
-
 
 # do_every(.001,every_1_ms)
