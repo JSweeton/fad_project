@@ -15,12 +15,17 @@
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (512)
 #define WR_BUF_SIZE (512)
+#define PACKET_DATA_SIZE 16
+#define PACKET_TOTAL_SIZE (PACKET_DATA_SIZE + 16)
 
 const char SERIAL_TAG[] = "FAD_SERIAL";
-const char PACKET_HEADER[] = "DATA\n";
-const char PACKET_FOOTER[] = "\nENDSIG\n";
+const char PACKET_HEADER[] = "DATA\0";
+const char PACKET_FOOTER[] = "ENDSIG\0\n";
 const char STOP_MSG[] = "STOPSIG\n";
 const int STOP_MSG_LENGTH = 8;
+
+char packet_buffer[PACKET_TOTAL_SIZE + 1] = "";
+char buffer_pos = 0;
 
 QueueHandle_t uart_handle;
 QueueHandle_t uart_write_handle;
@@ -36,9 +41,16 @@ typedef enum {
 
 typedef struct uart_write_evt_t {
     write_cmd cmd;
-    char data[128];
+    char *data;
     int size;
 } uart_write_evt_t;
+
+typedef struct packet {
+  char header[5];
+  char length[3];
+  char data[PACKET_DATA_SIZE];
+  char footer[8];
+} packet;
 
 void init_uart_0(int baud_rate) {
     
@@ -60,42 +72,61 @@ void init_uart_0(int baud_rate) {
 
 }
 
-char last_line[128] = "";
-
-int split_str_by_eol(char **dest, char *source, int length) {
-    dest[0] = source;
-    int tot = 1;
-    for (int i = 0; i < length-1; i++) {
-        if (source[i] == '\n') {
-            dest[tot] = source + i + 1;
-            tot++;
-        }
-    } 
-
-    if (*last_line != 0) { // Check to see if there is an unfinished line
-        strncat(last_line, dest[0], dest[1] - dest[0] - 1);
-    }
-    dest[tot] = 0;
-    memset(last_line, 0, sizeof(last_line));
-    if (source[length-1] != '\n') {
-        strcpy(last_line, dest[tot-1]);
-        return -1;
-    }
-
-    return tot;
+void handle_packet(packet *p)
+{
+    ESP_LOGI(SERIAL_TAG, "Handling packet!");
 }
 
+/* For now, only expect to handle data packets */
 
-void handle_serial_input(char *line, int length) {
-    // Scan through to find end line characters and split up input based on those values
-    // char** strings = (char **) malloc(sizeof(char**) * 10);
-    // int string_amount = split_str_by_eol(strings, line, length);
-    uart_write_evt_t event;
-    event.cmd = SEND_MSG;
-    sprintf(event.data, "line");
-    event.size = 30;
-    xQueueSend(uart_write_handle, (void *)&event, (portTickType) portMAX_DELAY);
+void handle_serial_input(char *line, int line_length)
+{
+    int pos = 0; // Points to the last EOL character position
+    char last_string_pos = 0;
+    while (pos < line_length)
+    {
+        if (line[pos] == '\n')
+        {
+            // In this case, attempt to process last piece of data as packet
+            if (pos < PACKET_TOTAL_SIZE - 1)
+            {
+                // In this case, we received the end of a line started in a
+                // previous call to the serial input handler
+                memcpy(packet_buffer + buffer_pos, line, pos + 1);
+            }
+            else
+            {
+                if (pos - last_string_pos == PACKET_TOTAL_SIZE - 1)
+                {
+                    // Here, the width of the chunk matches the expected packet width.
+                    // Copy the data into the packet buffer
+                    memcpy(packet_buffer, line + last_string_pos, PACKET_TOTAL_SIZE);
+                }
+            }
+            // Verify that the packet ends correctly
+            if (packet_buffer[PACKET_TOTAL_SIZE - 1] == '\n')
+            {
+                handle_packet((packet *)packet_buffer);
+                memset(packet_buffer, 0, PACKET_TOTAL_SIZE + 1);
+                buffer_pos = 0;
+            }
+            last_string_pos = pos + 1;
+        }
+        pos++;
+    }
 
+    memcpy(packet_buffer + buffer_pos, line + last_string_pos, pos - last_string_pos);
+
+    if (buffer_pos > 0 && strcmp(packet_buffer, "DATA") != 0)
+    {
+        // If the beginning of the packet buffer doesn't read like the start of a packet, then the data is corrupted
+        printf("DATA CORRUPT");
+        buffer_pos = 0;
+    }
+    else
+    {
+        buffer_pos += pos - last_string_pos;
+    }
 }
 
 void serial_read_task(void *params) {
@@ -140,7 +171,8 @@ void serial_write_task(void * params) {
                 /* uart_write_bytes copies data to TX ring bufffer, possibly blocking until there is space */
                 case SEND_PACKET:
                     uart_write_bytes(uart_num, PACKET_HEADER, 5);
-                    uart_write_bytes(uart_num, "\x00\x10\n", 3);
+                    char lengths[3] = {event.size >> 2, event.size, 0};
+                    uart_write_bytes(uart_num, lengths, 3);
                     uart_write_bytes(uart_num, (void *)event.data, event.size);
                     uart_write_bytes(uart_num, PACKET_FOOTER, 8);
                     break;
@@ -158,6 +190,8 @@ void serial_write_task(void * params) {
                 default:
                     break;
             }
+
+            if (event.data != NULL) free(event.data);
         } 
     }
 }

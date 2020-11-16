@@ -9,21 +9,10 @@
  * Bit-wise AND with the input ADC and a pseudo-random number from esp_random 
  */
 
-#include "fad_defs.h"
-#include "esp_log.h"
+#include "algo_white.h"
 #include "esp_system.h"
 
-//Usable portion of buffer to perform the algorithm, as other portions fill up
-#define ALGO_WHITE_SIZE (ADC_BUFFER_SIZE / 2)
-
-/**
- * @brief White noise algorithm for ESP masker
- * @param adc_buff Buffer that points to the beginning of the ADC data
- * @param dac_buff [OUT] Buffer that points to the beggining of DAC data staged to be output to the DAC
- * @param adc_pos Points to starting point of this algorithm chunk
- * @param dac_pos Points to starting point of this algorithm chunk
- */
-void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos) {
+void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos, int multisamples) {
 	uint16_t d_pos = dac_pos;
     uint16_t a_pos = adc_pos;
 
@@ -39,15 +28,15 @@ void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_
 	dac_buff[d_pos] = 0x7F;
 
 	//next_avg and cur_avg hold current and next set of multisampled ADC values, averaged together. Should be 12 bit unsigned
-	uint16_t next_avg = ((adc_buffer[adc_pos] + adc_buffer[adc_pos + 1]) >> 1); //bit shift 1 to limit output to 12 bit
+	uint16_t next_avg = ((adc_buff[adc_pos] + adc_buff[adc_pos + 1]) >> 1); //bit shift 1 to limit output to 12 bit
 	uint16_t cur_avg;
 
-	for(int i = 0; i < (adc_algo_size / MULTISAMPLES) - 1; i++) {
+	for(int i = 0; i < (algo_white_size / multisamples) - 1; i++) {
 
 		cur_avg = next_avg;
 		
 		/** TODO: FIX AVERAGING SCHEME TO AVERAGE MULTISAMPLES FOR MORE THAN 2 **/
-		next_avg = (adc_buffer[adc_pos + (i * 2) + 2] + adc_buffer[adc_pos + (i * 2) + 3]) >> 1;
+		next_avg = (adc_buff[adc_pos + (i * 2) + 2] + adc_buff[adc_pos + (i * 2) + 3]) >> 1;
 
 		// //to center input wave around 0 plus some, we effectively take discrete derivative, then discrete integral
 
@@ -68,12 +57,7 @@ void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_
 	// ESP_LOGI(ALGO_TAG, "Algorithm Running, diff: %4d, output: %3d", diff, dac_buff[5]);
 }
 
-/**
- * @brief Initialize white-noise algorithm
- * @param algo_function [out] pointer to algorithm function
- */
-void algo_white_init() {
-	ALGO_TAG = "ALGO_WHITE";
-	adc_algo_size = ALGO_WHITE_SIZE;
-	algo_function = algo_white; //from fad_defs.h
+
+void algo_white_init(int algo_size) {
+	algo_white_size = algo_size;
 }
