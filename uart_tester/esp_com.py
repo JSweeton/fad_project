@@ -280,7 +280,8 @@ class FadMonitor(object):
     chunks of data for the ESP32 to process, and for this program to display.
     '''
     DATA_HEADER = codecs.encode("DATA\x00")
-    DATA_FOOTER = codecs.encode("\x00ENDSIG\x00")
+    DATA_FOOTER = codecs.encode("ENDSIG\x00\n")
+    PACKET_SIZE = 256
 
     def __init__(self, serial_instance, eol="CRLF", send_data=b'None'):
         super(FadMonitor, self).__init__()
@@ -301,16 +302,10 @@ class FadMonitor(object):
             try:
                 self.send_data = bytes(send_data)
             except:
-                raise TypeError("Data needs to be sent as bytes object")
                 self.send_data = None
+                raise TypeError("Data needs to be sent as bytes object")
+
         self.last_packet = []
-
-        try:
-            self.length_encoded = len(self.send_data).to_bytes(2, byteorder='big') + b'\n'
-        except OverflowError:
-            # The length is longer than what can fit in two bytes. Send a zero instead
-            self.length_encoded = b'\x00\x00\n'
-
         self._last_line_part = b''
         self._invoke_processing_last_line_timer = None
         self._receiving_packet = False
@@ -367,12 +362,13 @@ class FadMonitor(object):
 
     def handle_serial_input(self, data, finalize_line=False):
         sp = data.split(b'\n')
+
         sp[0] = self._last_line_part + sp[0]
         # Places either empty byte or unfinished line of data in last line
         self._last_line_part = sp.pop()
 
         for line in sp:
-            if line[0:5] == b'DATA':
+            if line[0:4] == b'DATA':
                 self.handle_packet(line)
             else: 
                 self._print(line + b'\n')
@@ -384,9 +380,10 @@ class FadMonitor(object):
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):
             # Send data with serial write
+            
             self.serial.write(self.DATA_HEADER)
-            self.serial.write(self.length_encoded)
-            self.serial.write(self.send_data)
+            self.serial.write(b'\0\x01\0')
+            self.serial.write(self.send_data[0:self.PACKET_SIZE])
             self.serial.write(self.DATA_FOOTER)
 
         elif (cmd == CMD_STOP):
@@ -395,8 +392,8 @@ class FadMonitor(object):
     
     def handle_packet(self, packet):
         try:
+            print("PACKET RECEIVED")
             new_packet = FadSerialPacket(packet)
-            print(new_packet)
         except TypeError:
             self._print(b"[DATA ERROR]\n")
 
@@ -407,7 +404,7 @@ class FadSerialPacket():
     '''This class defines the components of a serial data packet
     which holds simulated audio data to be sent between the ESP32
     and the python serial program. The data consists of a header with
-    a Name and a length e.g. b'DATA\n\x10\x10' denotes a fad packet
+    a Name and a length e.g. b'DATA/0/x10/x10' (but back slashes) denotes a fad packet
     with a length of 0x1010, or a very large length.'''
 
     def __init__(self, data):
@@ -415,21 +412,17 @@ class FadSerialPacket():
             raise TypeError("Invalid data for packet")            
 
         self.length = int.from_bytes(data[5:7], byteorder='big')
-        self.data = data[2]
+        self.data = data[8:self.length + 8]
         
     def bad_data(self, data):
         if data[0:4] != b'DATA':
             return True
 
-        try:
-            length = int.from_bytes(data[5:7], byteorder='big')
-        except:
-            return True 
-
+        length = int.from_bytes(data[5:7], byteorder='big')
         if len(data) != length + 15:
             return True 
 
-        elif data[length + 8:] != b'\x00ENDSIG':
+        elif data[length + 8:] != b'ENDSIG\0':
             return True
 
         return False 
@@ -458,22 +451,21 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    my_data = dsp_tools.discrete_square_wave(100, 1024)
+    my_data = dsp_tools.discrete_square_wave(100, 256)
+    for i in range(256):
+        my_data[i] = i
 
-    try:
-        monitor = FadMonitor(serial_instance, send_data=my_data)
-        sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
-            p=serial_instance))
+    monitor = FadMonitor(serial_instance, send_data=my_data)
+    sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
+        p=serial_instance))
 
-        # yellow_print('--- Quit: {} | Menu: {} | Help: {} followed by {} ---'.format(
-        #     key_description(monitor.console_parser.exit_key),
-        #     key_description(monitor.console_parser.menu_key),
-        #     key_description(monitor.console_parser.menu_key),
-        #     key_description(CTRL_H)))
-        monitor.main_loop()
+    # yellow_print('--- Quit: {} | Menu: {} | Help: {} followed by {} ---'.format(
+    #     key_description(monitor.console_parser.exit_key),
+    #     key_description(monitor.console_parser.menu_key),
+    #     key_description(monitor.console_parser.menu_key),
+    #     key_description(CTRL_H)))
+    monitor.main_loop()
 
-    except:
-        pass
 
 
 if __name__ == "__main__":

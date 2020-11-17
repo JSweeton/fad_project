@@ -12,7 +12,7 @@ def to_discrete(np_array):
     high = max(np_array)
     low = min(np_array)
     np_array -= low
-    np_array = np_array * (256 / (high - low))
+    np_array = np_array * (255 / (high - low))
 
     return [int(i) for i in np_array]
 

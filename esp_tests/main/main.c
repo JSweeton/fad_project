@@ -15,7 +15,7 @@
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (512)
 #define WR_BUF_SIZE (512)
-#define PACKET_DATA_SIZE 16
+#define PACKET_DATA_SIZE 256 
 #define PACKET_TOTAL_SIZE (PACKET_DATA_SIZE + 16)
 
 const char SERIAL_TAG[] = "FAD_SERIAL";
@@ -81,6 +81,7 @@ void handle_packet(packet *p)
 
 void handle_serial_input(char *line, int line_length)
 {
+    ESP_LOGI(SERIAL_TAG, "HANDLING");
     int pos = 0; // Points to the last EOL character position
     char last_string_pos = 0;
     while (pos < line_length)
@@ -120,7 +121,6 @@ void handle_serial_input(char *line, int line_length)
     if (buffer_pos > 0 && strcmp(packet_buffer, "DATA") != 0)
     {
         // If the beginning of the packet buffer doesn't read like the start of a packet, then the data is corrupted
-        printf("DATA CORRUPT");
         buffer_pos = 0;
     }
     else
@@ -141,7 +141,9 @@ void serial_read_task(void *params) {
                     char *data = (char *) malloc(sizeof(char) * event.size + 1);
                     data[event.size] = 0;
                     uart_read_bytes(uart_num, data, event.size, 2);
-                    handle_serial_input(data, event.size);
+                    // handle_serial_input(data, event.size);
+                    uart_write_bytes(uart_num, data, event.size);
+                    // ESP_LOGI(SERIAL_TAG, "DATA AMOUNT: %d", data[event.size - 1]);
                     free(data);
                     data = NULL;
                     break;
@@ -204,5 +206,6 @@ void app_main(void) {
     uart_write_handle = xQueueCreate(10, sizeof(uart_write_evt_t));
     xTaskCreate(serial_read_task, "Uart0 Queue Task", 2048, NULL, configMAX_PRIORITIES - 3, &uart_read_task);
     xTaskCreate(serial_write_task, "Uart0 Write Task", 2048, NULL, configMAX_PRIORITIES - 3, &uart_write_task);
+
 
 }
