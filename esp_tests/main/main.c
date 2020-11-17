@@ -25,7 +25,8 @@ const char STOP_MSG[] = "STOPSIG\n";
 const int STOP_MSG_LENGTH = 8;
 
 char packet_buffer[PACKET_TOTAL_SIZE + 1] = "";
-char buffer_pos = 0;
+char packet_buffer_pos = 0;
+int receiving_packet = 0;
 
 QueueHandle_t uart_handle;
 QueueHandle_t uart_write_handle;
@@ -72,62 +73,79 @@ void init_uart_0(int baud_rate) {
 
 }
 
+
 void handle_packet(packet *p)
 {
     ESP_LOGI(SERIAL_TAG, "Handling packet!");
 }
 
-/* For now, only expect to handle data packets */
-
-void handle_serial_input(char *line, int line_length)
+/* Finds and returns the position (as a pointer) of the string "DATA" in the input string */
+char *find_data_string(char *data, int size)
 {
-    ESP_LOGI(SERIAL_TAG, "HANDLING");
-    int pos = 0; // Points to the last EOL character position
-    char last_string_pos = 0;
-    while (pos < line_length)
-    {
-        if (line[pos] == '\n')
-        {
-            // In this case, attempt to process last piece of data as packet
-            if (pos < PACKET_TOTAL_SIZE - 1)
-            {
-                // In this case, we received the end of a line started in a
-                // previous call to the serial input handler
-                memcpy(packet_buffer + buffer_pos, line, pos + 1);
-            }
-            else
-            {
-                if (pos - last_string_pos == PACKET_TOTAL_SIZE - 1)
-                {
-                    // Here, the width of the chunk matches the expected packet width.
-                    // Copy the data into the packet buffer
-                    memcpy(packet_buffer, line + last_string_pos, PACKET_TOTAL_SIZE);
-                }
-            }
-            // Verify that the packet ends correctly
-            if (packet_buffer[PACKET_TOTAL_SIZE - 1] == '\n')
-            {
-                handle_packet((packet *)packet_buffer);
-                memset(packet_buffer, 0, PACKET_TOTAL_SIZE + 1);
-                buffer_pos = 0;
-            }
-            last_string_pos = pos + 1;
-        }
-        pos++;
-    }
+  char const * const d = "DATA";
+  int d_pos = 0;
+  int i = 0;
+  while(i < size)
+  {
+    d_pos = (data[i] == d[d_pos]) ? d_pos + 1 : 0;
+    if (d_pos == 4) return &data[i - 3];
+    i++;
+  }
 
-    memcpy(packet_buffer + buffer_pos, line + last_string_pos, pos - last_string_pos);
+  return NULL;
+}
 
-    if (buffer_pos > 0 && strcmp(packet_buffer, "DATA") != 0)
+char packet_buffer[PACKET_TOTAL_SIZE] = "";
+char packet_buffer_pos = 0;
+void handle_serial_input(char *data, int size)
+{
+  if( size == 0 ) return;
+
+  if( !receiving_packet )
+  {
+    if( strncmp( data, "DATA", 4 ) == 0 )
     {
-        // If the beginning of the packet buffer doesn't read like the start of a packet, then the data is corrupted
-        buffer_pos = 0;
+      if( size < PACKET_TOTAL_SIZE )
+      {
+        receiving_packet = 1;
+        memcpy( packet_buffer, data, size );
+        packet_buffer_pos = size;
+      }
+      else 
+      {
+        memcpy( packet_buffer, data, PACKET_TOTAL_SIZE );
+        handle_packet((packet *) packet_buffer);
+        // receiving_packet = 0; // Implied
+        handle_serial_input( data + PACKET_TOTAL_SIZE, size - PACKET_TOTAL_SIZE );
+      }
     }
     else
     {
-        buffer_pos += pos - last_string_pos;
+      char *data_string = find_data_string(data, size); // Returns first occurence of "DATA" in data
+      if (data_string)
+      {
+        handle_serial_input(data_string, size - (char)(data_string - data));
+      }
     }
+  }
+  else
+  {
+    int room_to_copy = PACKET_TOTAL_SIZE - packet_buffer_pos;
+    if( size >= room_to_copy ) 
+    {
+      memcpy( packet_buffer + packet_buffer_pos, data, room_to_copy );
+      handle_packet((packet *) packet_buffer);
+      receiving_packet = 0;
+      handle_serial_input( data + room_to_copy, size - room_to_copy );
+    } 
+    else
+    {
+      memcpy( packet_buffer + packet_buffer_pos, data, size );
+      packet_buffer_pos += size;
+    }
+  }
 }
+
 
 void serial_read_task(void *params) {
 
