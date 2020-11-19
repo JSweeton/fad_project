@@ -8,10 +8,16 @@ from matplotlib.lines import Line2D
 
 
 size = 4800
+def to_discrete(np_array):
+    '''Takes numpy array and turns it into array of ints'''
+    return [int(i) for i in np_array]
 
 def normalize(array):
     array = array / np.sum(array)
     return array
+
+# def noise(length = size):
+#     return np.random.random(length) - 0.5
 
 def normal_wave(in_pad, vals):
     out_signal = np.zeros(size)
@@ -24,8 +30,8 @@ def normal_wave(in_pad, vals):
             out_signal[x] = 0
     return out_signal
 
-def noise(length = size):
-    return np.random.random(length) - 0.5
+def discrete_normal_wave(in_pad, vals):
+    return to_discrete(normal_wave(in_pad, vals))
 
 def square_wave(wave_width, length = size):
     output = np.zeros(length)
@@ -36,7 +42,11 @@ def square_wave(wave_width, length = size):
             x = x + 1
         else:
             x += wave_width
-    return output - 0.5
+    return output
+
+def discrete_square_wave(wave_width, length):
+    return to_discrete(square_wave(wave_width, length))
+
 
 def convolve(in_signal, impulse):
 
@@ -171,6 +181,10 @@ def signal_feeder(s, pll_func, buff_size = 1):
             for j in range(buff_size):
                 output.append(temp[j])
         return output
+
+def plot_from_bytes(bytes):
+    signals = [list(bytes)]
+    plot(signals)
 
 def plot(signals, labels: str = 0, title: str = "Figure"):
     fig, ax = plt.subplots()
