@@ -34,12 +34,13 @@
 /**
  * @brief     algorithm function
  * 
- * @param adc_buff Pointer to beginning of ADC buffer (also a global)
- * @param dac_buff Pointer to beginning of DAC buffer (also a global)
- * @param adc_pos Integer index of algorithm beginning location in ADC buffer
- * @param adc_pos Integer index of algorithm beginning location in ADC buffer
+ * @param in_buff Pointer to beginning of ADC buffer (also a global)
+ * @param out_buff Pointer to beginning of DAC buffer (also a global)
+ * @param in_pos Integer index of algorithm beginning location in ADC buffer
+ * @param out_pos Integer index of algorithm beginning location in ADC buffer
+ * @param multisamples The number of input samples per output
  */
-typedef void (* algo_func_t) (uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos);
+typedef void (* algo_func_t) (uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples);
 
 /**
  * @brief     callback function for app events

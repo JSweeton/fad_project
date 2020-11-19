@@ -2,10 +2,11 @@ import esp_com as com
 import serial
 
 
-# Test handle serial function
 
-packet = [b'DATA', b'\x00\x10', b'abcdeabcde', b'ENDSIG']
+my_data = [400, 500, 700] * 400 
 
-my_data = com.FadSerialPacket(packet)
+output_array = com.FadMonitor.partition_data(com.FadMonitor, my_data, 2)
 
-print(my_data.data.hex())
+
+for array in output_array:
+    print("length: ", len(array))

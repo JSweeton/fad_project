@@ -100,6 +100,10 @@ TAG_SERIAL = 1
 TAG_SERIAL_FLUSH = 2
 TAG_CMD = 3
 
+PACKET_SIZE = 256
+DATA_HEADER = codecs.encode("DATA\x00")
+DATA_FOOTER = codecs.encode("ENDSIG\x00\n")
+PACKET_SIZE = 256
 
 
 class StoppableThread(object):
@@ -189,9 +193,10 @@ class ConsoleReader(StoppableThread):
 
     def _cancel(self): # See monitor.py file in idf tools folder for explanation
         if os.name == 'posix':
-            import fcntl
-            import termios
-            fcntl.ioctl(self.console.fd, termios.TIOCSTI, b'\0')
+            # import fcntl
+            # import termios
+            # fcntl.ioctl(self.console.fd, termios.TIOCSTI, b'\0')
+            pass
 
 class ConsoleParser(object):
 
@@ -241,7 +246,7 @@ class SerialReader(StoppableThread):
             while self.alive:
                 try:
                     data = self.serial.read(self.serial.in_waiting or 1)
-                except (serial.serialutil.SerialException, IOError) as e:
+                except (serial.serialutil.SerialException, IOError):
                     data = b''
                     # self.serial.open() was successful before, therefore, this is an issue related to
                     # the disapperence of the device
@@ -277,13 +282,11 @@ class SerialStopException(Exception):
 class FadMonitor(object):
     '''
     Monitor class for ESP32, for use with FAD project. Has ability to send and receive
-    chunks of data for the ESP32 to process, and for this program to display.
+    chunks of data for the ESP32 to process, and for this program to display. Send data should
+    be formatted as integer array
     '''
-    DATA_HEADER = codecs.encode("DATA\x00")
-    DATA_FOOTER = codecs.encode("ENDSIG\x00\n")
-    PACKET_SIZE = 256
 
-    def __init__(self, serial_instance, eol="CRLF", send_data=b'None'):
+    def __init__(self, serial_instance, eol="CRLF", send_data=b'None', send_data_byte_size = 2):
         super(FadMonitor, self).__init__()
         self.event_queue = queue.Queue()
         self.cmd_queue = queue.Queue()
@@ -297,18 +300,27 @@ class FadMonitor(object):
         self.console_parser = ConsoleParser(eol)
         self.console_reader = ConsoleReader(self.console, self.event_queue, self.cmd_queue, self.console_parser)
         self.serial_reader = SerialReader(self.serial, self.event_queue)
-
-        if type(send_data) != type(bytes()):
-            try:
-                self.send_data = bytes(send_data)
-            except:
-                self.send_data = None
-                raise TypeError("Data needs to be sent as bytes object")
+        self.data_array = self.partition_data(send_data, send_data_byte_size)
 
         self.last_packet = []
         self._last_line_part = b''
         self._invoke_processing_last_line_timer = None
         self._receiving_packet = False
+
+    def partition_data(self, data_to_send, int_size_in_bytes):
+        total_length = len(data_to_send)
+        data_array = []
+        array_vals_per_packet = PACKET_SIZE // int_size_in_bytes
+        num_packets = total_length * int_size_in_bytes // PACKET_SIZE
+        for i in range(num_packets):
+            data_as_bytes = b''
+            for j in range(array_vals_per_packet): # each int pos is equivalent to size
+                data_pos = i * array_vals_per_packet + j
+                data_as_bytes += data_to_send[data_pos].to_bytes(2, byteorder='big')
+
+            data_array.append(data_as_bytes)
+        
+        return data_array
 
     def _invoke_processing_last_line(self):
         self.event_queue.put((TAG_SERIAL_FLUSH, b''), False)
@@ -377,25 +389,38 @@ class FadMonitor(object):
             self._print(self._last_line_part + b'\n')
             self._last_line_part = b''
     
+    def send_data(self):
+        n = len(self.data_array)
+        print("Sending data...\n") 
+        for i in range(n): 
+            self.serial.write(DATA_HEADER)
+            b = lambda x: x.to_bytes(1, byteorder='big') # used to convert 1 int to a byte
+            self.serial.write(b(n - i - 1) + b(i))
+            self.serial.write(self.data_array[n])
+            self.serial.write(DATA_FOOTER)
+
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):
             # Send data with serial write
-            
-            self.serial.write(self.DATA_HEADER)
-            self.serial.write(b'\0\x01\0')
-            self.serial.write(self.send_data[0:self.PACKET_SIZE])
-            self.serial.write(self.DATA_FOOTER)
+            self.send_data()
 
         elif (cmd == CMD_STOP):
             self.serial_reader.stop()
             self.console_reader.stop()
-    
+
     def handle_packet(self, packet):
         try:
             print("PACKET RECEIVED")
             new_packet = FadSerialPacket(packet)
-        except TypeError:
-            self._print(b"[DATA ERROR]\n")
+
+        except TypeError as err:
+            print(repr(err))
+            new_packet = None
+            return
+        
+        if new_packet.packets_previous == 0 and new_packet.packets_incoming > 0:     # A new set of packets is incoming
+            self.current_packet_set = [new_packet.data]
+
 
     def _print(self, string):
         self.console.write_bytes(string)
@@ -408,27 +433,23 @@ class FadSerialPacket():
     with a length of 0x1010, or a very large length.'''
 
     def __init__(self, data):
-        if self.bad_data(data):
-            raise TypeError("Invalid data for packet")            
+        err = self.bad_data(data)
+        if err != None:
+            raise TypeError(err)            
 
-        self.length = int.from_bytes(data[5:7], byteorder='big')
-        self.data = data[8:self.length + 8]
+        self.data = data[8 : PACKET_SIZE + 8]   # Data as bytes
+        self.packets_incoming = int(data[5])
+        self.packets_previous = int(data[6])
         
     def bad_data(self, data):
-        if data[0:4] != b'DATA':
-            return True
+        if data[0:4] != DATA_HEADER[0:4]:
+            return "Invalid Header" 
 
-        length = int.from_bytes(data[5:7], byteorder='big')
-        if len(data) != length + 15:
-            return True 
-
-        elif data[length + 8:] != b'ENDSIG\0':
-            return True
-
-        return False 
+        elif data[-7:] != DATA_FOOTER[0:7]:
+            return "Invalid footer" 
 
     def __str__(self):
-        return f'Data of length {self.length}, Data: {self.data.hex()}'
+        return f'Data: {self.data.hex()}'
 
 def main():
     def _get_default_serial_port():
@@ -451,9 +472,7 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    my_data = dsp_tools.discrete_square_wave(100, 256)
-    for i in range(256):
-        my_data[i] = i
+    my_data = dsp_tools.to_discrete(512 * dsp_tools.square_wave(20, 256))
 
     monitor = FadMonitor(serial_instance, send_data=my_data)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(

@@ -12,18 +12,19 @@
 #include <stdint.h>
 
 
-//Usable portion of buffer to perform the algorithm, as other portions fill up
+/* Usable portion of buffer to perform the algorithm, as other portions fill up */
 int algo_white_size;
 
 /**
  * @brief White noise algorithm for ESP masker
- * @param adc_buff Buffer that points to the beginning of the ADC data
- * @param dac_buff [OUT] Buffer that points to the beggining of DAC data staged to be output to the DAC
- * @param adc_pos Points to starting point of this algorithm chunk
- * @param dac_pos Points to starting point of this algorithm chunk
- * @param multisamples The number of input data per output
+ * @param in_buff  Buffer that points to the beginning of the ADC data. Must be multisamples times larger
+ *                  than out_buff
+ * @param out_buff  [OUT] Buffer that points to the beggining of DAC data staged to be output to the DAC
+ * @param in_pos   Points to starting point of this algorithm chunk
+ * @param out_pos   Points to starting point of this algorithm chunk.
+ * @param multisamples  The number of input data per output
  */
-void algo_white(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos, int multisamples); 
+void algo_white(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples); 
 
 /**
  * @brief Initialize white-noise algorithm

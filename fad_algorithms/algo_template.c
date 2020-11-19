@@ -10,10 +10,10 @@
 
 #include "algo_template.h"
 
-void algo_template(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint16_t dac_pos, int multisamples) {
+void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples) {
 
     /**
-     * adc_pos and dac_pos point to the algorithm half of the buffer. Only ready and write to data in the half
+     * in_pos and out_pos point to the algorithm half of the buffer. Only ready and write to data in the half
      * of the buffer designated by these positions
      * 
      * The algorithm should have minimum side effects: try not to write to globals defined in other files, etc.
@@ -26,13 +26,13 @@ void algo_template(uint16_t *adc_buff, uint8_t *dac_buff, uint16_t adc_pos, uint
         uint16_t avg = 0;
 
         for (int j = 0; i < multisamples; j++) {
-            avg += adc_buff[adc_pos + (i * multisamples) + j];
+            avg += in_buff[in_pos + (i * multisamples) + j];
         }
 
         avg = avg / multisamples;
         /** END SECTION **/
         
-        dac_buff[dac_pos + i] = avg >> 4;
+        out_buff[out_pos + i] = avg >> 4;
     }
 
 }
