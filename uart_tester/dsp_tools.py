@@ -186,7 +186,7 @@ def plot_from_bytes(bytes):
     signals = [list(bytes)]
     plot(signals)
 
-def plot(signals, labels: str = 0, title: str = "Figure"):
+def plot(signals, labels, title: str = "Figure"):
     fig, ax = plt.subplots()
     for s in signals:
         ax.plot(s)

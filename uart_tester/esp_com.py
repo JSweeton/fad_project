@@ -193,10 +193,9 @@ class ConsoleReader(StoppableThread):
 
     def _cancel(self): # See monitor.py file in idf tools folder for explanation
         if os.name == 'posix':
-            # import fcntl
-            # import termios
-            # fcntl.ioctl(self.console.fd, termios.TIOCSTI, b'\0')
-            pass
+            import fcntl
+            import termios
+            fcntl.ioctl(self.console.fd, termios.TIOCSTI, b'\0')
 
 class ConsoleParser(object):
 
@@ -300,6 +299,7 @@ class FadMonitor(object):
         self.console_parser = ConsoleParser(eol)
         self.console_reader = ConsoleReader(self.console, self.event_queue, self.cmd_queue, self.console_parser)
         self.serial_reader = SerialReader(self.serial, self.event_queue)
+        self.original_data = send_data
         self.data_array = self.partition_data(send_data, send_data_byte_size)
 
         self.last_packet = []
@@ -380,7 +380,7 @@ class FadMonitor(object):
         self._last_line_part = sp.pop()
 
         for line in sp:
-            if line[0:4] == b'DATA':
+            if line[0:4] == DATA_HEADER[0:4]:
                 self.handle_packet(line)
             else: 
                 self._print(line + b'\n')
@@ -391,12 +391,11 @@ class FadMonitor(object):
     
     def send_data(self):
         n = len(self.data_array)
-        print("Sending data...\n") 
-        for i in range(n): 
+        b = lambda x: x.to_bytes(1, byteorder='big') # used to convert 1 int to a byte
+        for i in range(n):
             self.serial.write(DATA_HEADER)
-            b = lambda x: x.to_bytes(1, byteorder='big') # used to convert 1 int to a byte
-            self.serial.write(b(n - i - 1) + b(i))
-            self.serial.write(self.data_array[n])
+            self.serial.write(b(n - i - 1) + b(i) + b'\0')
+            self.serial.write(self.data_array[i])
             self.serial.write(DATA_FOOTER)
 
     def handle_commands(self, cmd):
@@ -410,8 +409,10 @@ class FadMonitor(object):
 
     def handle_packet(self, packet):
         try:
-            print("PACKET RECEIVED")
             new_packet = FadSerialPacket(packet)
+            print("PACKET RECEIVED")
+            dsp_tools.plot([list(new_packet.data), self.original_data[0:256]], ["New Data", "Old Data"])
+            dsp_tools.show()
 
         except TypeError as err:
             print(repr(err))

@@ -1,12 +1,11 @@
 import esp_com as com
 import serial
+import dsp_tools
+import matplotlib.pyplot as plt
 
 
-
-my_data = [400, 500, 700] * 400 
-
-output_array = com.FadMonitor.partition_data(com.FadMonitor, my_data, 2)
+my_arr = dsp_tools.square_wave(20, 256)
 
 
-for array in output_array:
-    print("length: ", len(array))
+plt.plot(my_arr)
+plt.show()
