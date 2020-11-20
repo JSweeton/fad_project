@@ -233,12 +233,13 @@ void packet_handler_task(void *params)
     packet p;
 
     int packets_remaining = 1;
+    char *return_data = malloc(PACKET_DATA_SIZE);
+
     for (;;)
     {
         if (xQueueReceive(packet_queue, (void *)&p, (portTickType)portMAX_DELAY) == pdPASS)
         {
            /* Packets are formatted as sequential 2-byte values. */
-            char *return_data = malloc(PACKET_DATA_SIZE);
             ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d", packets_remaining);
             
             if (packets_remaining == 0) {
@@ -357,7 +358,7 @@ void test()
 void app_main(void)
 {
     init_uart_0(115200);
-    algo_test_init(256);
+    algo_test_init(128);
     fad_algo = algo_test;
 
     /* Create queues for Uart Write task and Packet Handler task */

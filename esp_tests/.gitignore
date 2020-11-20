@@ -6,4 +6,4 @@ build
 flash.sh
 init.sh
 monitor.sh
-
+sdkconfig
