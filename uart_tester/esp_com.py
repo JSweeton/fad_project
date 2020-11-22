@@ -393,12 +393,21 @@ class FadMonitor(object):
     def send_data(self):
         n = len(self.data_array)
         b = lambda x: x.to_bytes(1, byteorder='big') # used to convert 1 int to a byte
+        bytes_sent = 0
         for i in range(n):
-            self.serial.write(DATA_HEADER)
-            self.serial.write(b(n - i - 1) + b(i) + b'\0')
-            self.serial.write(self.data_array[i])
-            self.serial.write(DATA_FOOTER)
-            print("Wrote packet")
+            bytes_sent += self.serial.write(DATA_HEADER)
+            bytes_sent += self.serial.write(b(n - i - 1) + b(i) + b'\0')
+            bytes_sent += self.serial.write(self.data_array[i])
+            bytes_sent += self.serial.write(DATA_FOOTER)
+            # For testing purposes, add artificial delay
+            # for i in range(1000000):
+            #     if (i % 2):
+            #         bytes_sent += 1
+            #     else:
+            #         bytes_sent -= 1
+
+            print("Wrote packet, bytes sent:", bytes_sent)
+            bytes_sent = 0
 
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):

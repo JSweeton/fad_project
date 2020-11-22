@@ -30,8 +30,8 @@
 #include "fad_defs.h"
 
 #define BUF_SIZE (1024)
-#define RD_BUF_SIZE (512)
-#define WR_BUF_SIZE (512)
+#define RD_BUF_SIZE (1024)
+#define WR_BUF_SIZE (1024)
 #define PACKET_DATA_SIZE 256
 #define PACKET_TOTAL_SIZE (PACKET_DATA_SIZE + 16)
 #define UART_INSTANCE UART_NUM_0
@@ -109,6 +109,7 @@ void send_packet_to_queue(packet *p)
 {
     if( strncmp(p->footer, "ENDSIG", 6) == 0 ) /* Verify packet ends with the footer */
         xQueueSend( packet_queue, (void *)p, (portTickType)portMAX_DELAY );
+    else ESP_LOGI(SERIAL_TAG, "Bad Packet noticed in send_packet_to_queue!");
 }
 
 
@@ -257,7 +258,7 @@ void packet_handler_task(void *params)
                 /* If the first packet comes in with 3 remaining, that means four packets are input, so 2 must be output (or 1 remaining) */
                 /* If the first packet comes in with 7 remaining, that means 8 packets are input, so 4 must be output (or 3 remaining) */
                 int num_to_follow = p.packets_left / 2; 
-                // send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, num_sent);
+                send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, num_sent);
                 ESP_LOGI(SERIAL_TAG, "PACKET SENT OUT, remaining to send: %d, past sent: %d", num_to_follow, num_sent);
                 num_sent++;
             }
@@ -292,6 +293,7 @@ void serial_read_task(void *params)
                 char *data = (char *)malloc(sizeof(char) * event.size + 1);
                 data[event.size] = 0;   /* Append 0 to end of data for certainty */
                 uart_read_bytes(UART_INSTANCE, data, event.size, 2);
+                ESP_LOGI(SERIAL_TAG, "DATA HERE! Size: %d", event.size);
                 handle_serial_input(data, event.size);
                 free(data);
                 data = NULL;
