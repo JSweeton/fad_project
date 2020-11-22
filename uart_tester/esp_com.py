@@ -306,6 +306,7 @@ class FadMonitor(object):
         self._last_line_part = b''
         self._invoke_processing_last_line_timer = None
         self._receiving_packet = False
+        self.receive_buffer = []
 
     def partition_data(self, data_to_send, int_size_in_bytes):
         total_length = len(data_to_send)
@@ -397,6 +398,7 @@ class FadMonitor(object):
             self.serial.write(b(n - i - 1) + b(i) + b'\0')
             self.serial.write(self.data_array[i])
             self.serial.write(DATA_FOOTER)
+            print("Wrote packet")
 
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):
@@ -411,9 +413,8 @@ class FadMonitor(object):
         try:
             new_packet = FadSerialPacket(packet)
             print("PACKET RECEIVED")
-            dsp_tools.plot([list(new_packet.data), self.original_data[0:256]], ["New Data", "Old Data"])
-            dsp_tools.show()
-
+            self.add_packet_to_receive_buffer(new_packet)
+            
         except TypeError as err:
             print(repr(err))
             new_packet = None
@@ -421,7 +422,22 @@ class FadMonitor(object):
         
         if new_packet.packets_previous == 0 and new_packet.packets_incoming > 0:     # A new set of packets is incoming
             self.current_packet_set = [new_packet.data]
+    
+    def add_packet_to_receive_buffer(self, packet):
+        self.receive_buffer.append(packet)
+        if packet.packets_incoming == 0:
+            self.display_received_packets()
 
+    def display_received_packets(self):
+        # Stitch together data within packets
+        all_data = []   # Holds stitched data from each received packet
+        for packet in self.receive_buffer:
+            packet_data = list(packet.data)
+            for data in packet_data:
+                all_data.append(data)
+
+        dsp_tools.plot([all_data], labels=["Packet Data"])
+        dsp_tools.show()
 
     def _print(self, string):
         self.console.write_bytes(string)
@@ -473,7 +489,7 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    my_data = dsp_tools.to_discrete(512 * dsp_tools.square_wave(20, 256))
+    my_data = dsp_tools.to_discrete(512 * dsp_tools.square_wave(20, 512)) # Square wave with amplitude 512 and width 20
 
     monitor = FadMonitor(serial_instance, send_data=my_data)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(

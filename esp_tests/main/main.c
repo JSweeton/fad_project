@@ -46,7 +46,7 @@ enum write_cmd {
 
 typedef struct uart_write_evt_t {
     enum write_cmd cmd;     /* The commands for the uart write handler. */
-    char *data;             /* The data to be written to the handler */
+    uint8_t *data;             /* The data to be written to the handler */
     int size;               /* The size, in bytes, of the data to be copied */
     char num_to_follow;     /* For a packet, number of packets that are coming after */
     char num_sent;          /* For a packet, number of packets that came before */
@@ -54,8 +54,9 @@ typedef struct uart_write_evt_t {
 
 typedef struct packet {
     char header[5];                 /* Data header, as described in intro */
-    char packets_left[1];           /* 1 byte indicating packets left */
-    char packets_previous[2];       /* 1 byte indicating how many previous packets */
+    char packets_left;           /* 1 byte indicating packets left */
+    char packets_previous;       /* 1 byte indicating how many previous packets */
+    char zero_char;
     char data[PACKET_DATA_SIZE];    /* The bytes of data as raw bytes */
     char footer[8];                 /* The footer of the data, e.g. "ENDSIG/0/n" */
 } packet;
@@ -117,7 +118,7 @@ void send_packet_to_queue(packet *p)
  * @param data Pointer to the data to be sent. Will be freed through UART Write Queue
  * @param size The size of the data to be sent. Has to be 256 to work, meant to programatically confirm data size.
  */
-void send_data_as_one_packet(char *data, int size)
+void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int num_prev)
 {
     if (data != NULL && size == PACKET_DATA_SIZE)
     {
@@ -125,8 +126,8 @@ void send_data_as_one_packet(char *data, int size)
         msg.cmd = SEND_PACKET;
         msg.size = size; 
         msg.data = data;
-        msg.num_to_follow = 0;
-        msg.num_sent = 0;
+        msg.num_to_follow = num_to_follow;
+        msg.num_sent = num_prev;
 
         xQueueSend(uart_write_handle, (void *)&msg, (portTickType)portMAX_DELAY);
     }
@@ -173,7 +174,6 @@ char *find_data_string(char *data, int size)
  */
 void handle_serial_input(char *data, int size)
 {
-    ESP_LOGI(SERIAL_TAG, "Received Input");
     if (size == 0)
         return;
 
@@ -231,27 +231,38 @@ void handle_serial_input(char *data, int size)
 void packet_handler_task(void *params)
 {
     packet p;
-
-    int packets_remaining = 1;
-    char *return_data = malloc(PACKET_DATA_SIZE);
+    uint8_t *output_data = NULL;
+    int num_sent = 0;
 
     for (;;)
     {
         if (xQueueReceive(packet_queue, (void *)&p, (portTickType)portMAX_DELAY) == pdPASS)
         {
-           /* Packets are formatted as sequential 2-byte values. */
-            ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d", packets_remaining);
-            
-            if (packets_remaining == 0) {
-                fad_algo((uint16_t *)&p.data, (uint8_t *)return_data, 0, 128, 1);
-                ESP_LOGI(SERIAL_TAG, "Sending return packet...");
-                send_data_as_one_packet(return_data, PACKET_DATA_SIZE);
-            }
-            else
+           /* Incoming packets are formatted as sequential 16-bit values. Need two input packets to create 1 output packet */
+            ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d, past: %d", p.packets_left, p.packets_previous);
+
+            int write_pos = PACKET_DATA_SIZE / 2;
+
+            if (p.packets_left % 2 == 1)    /* This means this packet is the first of a pair (since "odd" packets have even packets left) */
             {
-                fad_algo((uint16_t *)&p.data, (uint8_t *)return_data, 0, 0, 1);
+                output_data = (uint8_t *)malloc(PACKET_DATA_SIZE); /* Reallocate output data to a new address for fresh memory (prevents corrupting... */
+                write_pos = 0;                                     /* ...previous packets before they've been written) */
             }
-            packets_remaining = 0;
+
+            ESP_LOGI(SERIAL_TAG, "Beginning algo...");
+            fad_algo((uint16_t *)p.data, output_data, 0, write_pos, 1);
+
+            if (write_pos == 128)   /* Packet is ready! Send out with appropriate data */
+            {
+                /* If the first packet comes in with 3 remaining, that means four packets are input, so 2 must be output (or 1 remaining) */
+                /* If the first packet comes in with 7 remaining, that means 8 packets are input, so 4 must be output (or 3 remaining) */
+                int num_to_follow = p.packets_left / 2; 
+                // send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, num_sent);
+                ESP_LOGI(SERIAL_TAG, "PACKET SENT OUT, remaining to send: %d, past sent: %d", num_to_follow, num_sent);
+                num_sent++;
+            }
+            
+            
         }
     }
 
@@ -348,12 +359,12 @@ void serial_write_task(void *params)
 }
 
 
-void test() 
-{
-    char *data = malloc(PACKET_DATA_SIZE);
-    memset(data, 65, PACKET_DATA_SIZE);
-    send_data_as_one_packet(data, PACKET_DATA_SIZE);
-}
+// void test() 
+// {
+//     char *data = malloc(PACKET_DATA_SIZE);
+//     memset(data, 65, PACKET_DATA_SIZE);
+//     send_data_as_one_packet(data, PACKET_DATA_SIZE, 0, 0);
+// }
 
 void app_main(void)
 {
