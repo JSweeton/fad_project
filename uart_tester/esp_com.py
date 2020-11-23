@@ -102,7 +102,7 @@ TAG_CMD = 3
 
 PACKET_SIZE = 256
 DATA_HEADER = codecs.encode("DATA\x00")
-DATA_FOOTER = codecs.encode("ENDSIG\x00\n")
+DATA_FOOTER = codecs.encode("END\x00")
 PACKET_SIZE = 256
 
 
@@ -396,9 +396,11 @@ class FadMonitor(object):
         bytes_sent = 0
         for i in range(n):
             bytes_sent += self.serial.write(DATA_HEADER)
-            bytes_sent += self.serial.write(b(n - i - 1) + b(i) + b'\0')
+            bytes_sent += self.serial.write(b'DT\x00')
             bytes_sent += self.serial.write(self.data_array[i])
             bytes_sent += self.serial.write(DATA_FOOTER)
+            bytes_sent += self.serial.write(b(n - i - 1) + b(i) + b'\0')
+            bytes_sent += self.serial.write(b'\x00\n')
             # For testing purposes, add artificial delay
             # for i in range(1000000):
             #     if (i % 2):
@@ -428,9 +430,6 @@ class FadMonitor(object):
             print(repr(err))
             new_packet = None
             return
-        
-        if new_packet.packets_previous == 0 and new_packet.packets_incoming > 0:     # A new set of packets is incoming
-            self.current_packet_set = [new_packet.data]
     
     def add_packet_to_receive_buffer(self, packet):
         self.receive_buffer.append(packet)
@@ -464,14 +463,15 @@ class FadSerialPacket():
             raise TypeError(err)            
 
         self.data = data[8 : PACKET_SIZE + 8]   # Data as bytes
-        self.packets_incoming = int(data[5])
-        self.packets_previous = int(data[6])
+        self.type = data[5:6]
+        self.packets_incoming = int(data[PACKET_SIZE + 12])
+        self.packets_previous = int(data[PACKET_SIZE + 13])
         
     def bad_data(self, data):
         if data[0:4] != DATA_HEADER[0:4]:
             return "Invalid Header" 
 
-        elif data[-7:] != DATA_FOOTER[0:7]:
+        elif data[-7:-4] != DATA_FOOTER[0:3]:
             return "Invalid footer" 
 
     def __str__(self):
