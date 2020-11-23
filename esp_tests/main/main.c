@@ -46,24 +46,27 @@ enum write_cmd {
 
 typedef struct uart_write_evt_t {
     enum write_cmd cmd;     /* The commands for the uart write handler. */
-    uint8_t *data;             /* The data to be written to the handler */
+    uint8_t *data;          /* The data to be written to the handler */
     int size;               /* The size, in bytes, of the data to be copied */
     char num_to_follow;     /* For a packet, number of packets that are coming after */
     char num_sent;          /* For a packet, number of packets that came before */
 } uart_write_evt_t;
 
 typedef struct packet {
-    char header[5];                 /* Data header, as described in intro */
-    char packets_left;           /* 1 byte indicating packets left */
-    char packets_previous;       /* 1 byte indicating how many previous packets */
-    char zero_char;
+    char header[4];                 /* Data header, as described in intro */
+    char type[2];
+    char zero_char;                 /* 1 null byte (here to make converting to packet easier) */
     char data[PACKET_DATA_SIZE];    /* The bytes of data as raw bytes */
-    char footer[8];                 /* The footer of the data, e.g. "ENDSIG/0/n" */
+    char footer[3];                 /* The footer of the data, e.g. "END/0/n" */
+    char zero_char;
+    char packets_left;              /* 1 byte indicating packets left */
+    char packets_previous;          /* 1 byte indicating how many previous packets */
+    char tail[2];
 } packet;
 
-char packet_buffer[PACKET_TOTAL_SIZE + 1] = "";
-char packet_buffer_pos = 0;
-int receiving_packet = 0;
+uint8_t packet_buffer[PACKET_TOTAL_SIZE + 1] = "";  /* Holds the contents of partial packets */
+int packet_buffer_pos = 0;  /* Tracks where to paste next into packet buffer */
+int receiving_packet = 0;   /* Tracks whether we are in the middle of receiving a packet */
 
 QueueHandle_t uart_handle;
 QueueHandle_t uart_write_handle;
@@ -72,7 +75,7 @@ algo_func_t fad_algo;
 
 const char SERIAL_TAG[] = "FAD_SERIAL";
 const char PACKET_HEADER[] = "DATA\0";
-const char PACKET_FOOTER[] = "ENDSIG\0\n";
+const char PACKET_FOOTER[] = "END\0";
 const char STOP_MSG[] = "STOPSIG\n";
 const int STOP_MSG_LENGTH = 8;
 
