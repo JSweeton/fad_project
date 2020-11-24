@@ -205,7 +205,6 @@ class ConsoleParser(object):
             "CR": lambda c: c.replace("\n", "\r"),
             "LF": lambda c: c.replace("\r", "\n"),
         }[eol]
-        self.menu_key = CTRL_T
         self.exit_key = CTRL_RBRACKET
         self.send_data_key = SEND_DATA_KEY 
 

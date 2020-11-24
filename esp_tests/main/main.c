@@ -37,11 +37,11 @@
 #define UART_INSTANCE UART_NUM_0
 
 enum write_cmd {
-    SEND_PACKET = 0,
-    SEND_MSG,
-    SEND_STOP,
-    SEND_GENERIC,
-    SEND_TEST,
+    SEND_PACKET = 0,    /* Send data as a packet */
+    SEND_MSG,           /* Send data as ESP_LOG */
+    SEND_STOP,          /* Send STOP message */
+    SEND_GENERIC,       /* Send data string as straight serial data */
+    SEND_TEST,          /* Test cmd for bug testing */
 };
 
 typedef struct uart_write_evt_t {
@@ -53,12 +53,10 @@ typedef struct uart_write_evt_t {
 } uart_write_evt_t;
 
 typedef struct packet {
-    char header[4];                 /* Data header, as described in intro */
-    char type[2];
-    char zero_char;                 /* 1 null byte (here to make converting to packet easier) */
+    char header[5];                 /* Data header, as described in intro */
+    char type[3];
     char data[PACKET_DATA_SIZE];    /* The bytes of data as raw bytes */
-    char footer[3];                 /* The footer of the data, e.g. "END/0/n" */
-    char zero_char;
+    char footer[4];                 /* The footer of the data, e.g. "END/0/n" */
     char packets_left;              /* 1 byte indicating packets left */
     char packets_previous;          /* 1 byte indicating how many previous packets */
     char tail[2];
@@ -166,6 +164,64 @@ char *find_data_string(char *data, int size)
 
 
 /**
+ * @brief Parses serial input and checks for a packet, and handles a packet if a whole one is found.
+ * @param data A pointer to the serial data
+ * @param size The number of bytes to read/parse starting at data
+ * @return True (1) or False (0) indicating whether we are in the middle of receiving a packet after the data is parsed 
+ */
+int handle_start_of_packet(char *data, int size)
+{
+    if (strncmp(data, PACKET_HEADER, size) == 0) /* Header of packet found at beginning! Should be the case most of the time. */
+    {
+        if (size < PACKET_TOTAL_SIZE) /* Only received part of a packet */
+        {
+            memcpy(packet_buffer, data, size);
+            packet_buffer_pos = size;
+            return 1;   /* return a 1 since we only have a partial packet in packet buffer */
+        }
+        else /* size is greater than that of one packet, received more than one. Will not happen in any case, but here just in case */
+        {
+            memcpy(packet_buffer, data, PACKET_TOTAL_SIZE);
+            send_packet_to_queue((packet *)packet_buffer);
+            return handle_start_of_packet(data + PACKET_TOTAL_SIZE, size - PACKET_TOTAL_SIZE); /* Send extra data back through handler */
+        }
+    }
+    else /* strncmp != 0, packet doesn't begin with data */
+    {
+        char *data_string = find_data_string(data, size); // Returns first occurence of "DATA" in data
+        if (data_string)
+        {
+            return handle_start_of_packet(data_string, size - (char)(data_string - data));
+        }
+    }
+}
+
+
+/**
+ * @brief This function accepts and parses serial inputs in the case that we are in the middle of receiving a packet
+ * @param data A pointer to the serial data
+ * @param size The number of bytes to read/parse starting at data
+ * @return True (1) or False (0) indicating whether we are still in the middle of receiving a packet 
+ */
+int continue_handling_packet(char *data, int size)
+{
+    int room_to_copy = PACKET_TOTAL_SIZE - packet_buffer_pos;
+    if (size >= room_to_copy)
+    {
+        memcpy(packet_buffer + packet_buffer_pos, data, room_to_copy);
+        send_packet_to_queue((packet *)packet_buffer);
+        return handle_start_of_packet(data + room_to_copy, size - room_to_copy);
+    }
+    else    /* data won't fill to end of packet buffer */
+    {
+        memcpy(packet_buffer + packet_buffer_pos, data, size);
+        packet_buffer_pos += size;
+        return 1;
+    }
+}
+
+
+/**
  * @brief This function takes a set amount of serial data and handles a packet. If we
  * weren't previously receiving a packet, then we check the line for the header "DATA".
  * If it exists, we place the line in the packet buffer global, and if it is full, we
@@ -174,57 +230,20 @@ char *find_data_string(char *data, int size)
  * 
  * @param data A pointer to the serial data to be processed
  * @param size The number of bytes of the serial data to be processed.
- *
+ * @param receiving_packet A true (1) or false (0) value indicating whether we are in the middle of a packet
+ * @return  '1' if we are now in the middle of receiving a packet
+ *          '0' if we are not in the middle of receiving a packet 
  */
-void handle_serial_input(char *data, int size)
+int handle_serial_input(char *data, int size, int receiving_packet)
 {
     if (size == 0)
-        return;
+        return 0;
 
-    if (!receiving_packet) /* We are not in the middle of receiving a packet, so search this packet for header */
-    {
-        if (strncmp(data, PACKET_HEADER, size) == 0) /* Header found at beginning! Should be the case most of the time. */
-        {
-            if (size < PACKET_TOTAL_SIZE) /* Only received part of a packet */
-            {
-                receiving_packet = 1;
-                memcpy(packet_buffer, data, size);
-                packet_buffer_pos = size;
-            }
-            else /* size is greater than that of one packet */
-            {
-                memcpy(packet_buffer, data, PACKET_TOTAL_SIZE);
-                send_packet_to_queue((packet *)packet_buffer);
-                // receiving_packet = 0; // Implied
-                handle_serial_input(data + PACKET_TOTAL_SIZE, size - PACKET_TOTAL_SIZE); /* Send extra data back through handler */
-            }
-        }
-        else /* strncmp != 0, packet doesn't begin with data */
-        {
-            char *data_string = find_data_string(data, size); // Returns first occurence of "DATA" in data
-            if (data_string)
-            {
-                handle_serial_input(data_string, size - (char)(data_string - data));
-            }
-        }
-    }
-    
-    else    /* we are previously receiving packet, so check how much we have in buffer and copy into buffer */
-    {
-        int room_to_copy = PACKET_TOTAL_SIZE - packet_buffer_pos;
-        if (size >= room_to_copy)
-        {
-            memcpy(packet_buffer + packet_buffer_pos, data, room_to_copy);
-            send_packet_to_queue((packet *)packet_buffer);
-            receiving_packet = 0;
-            handle_serial_input(data + room_to_copy, size - room_to_copy);
-        }
-        else    /* data won't fill to end of packet buffer */
-        {
-            memcpy(packet_buffer + packet_buffer_pos, data, size);
-            packet_buffer_pos += size;
-        }
-    }
+    /* We are not in the middle of receiving a packet, so search this packet for header */
+    if (!receiving_packet) return handle_start_of_packet(data, size);     
+
+    /* we are previously receiving packet, so check how much we have in buffer and copy into buffer */
+    else return continue_handling_packet(data, size);  
 }
 
 
@@ -284,6 +303,7 @@ void serial_read_task(void *params)
 {
 
     uart_event_t event; /* Initialize a copy of an event object to receive Queue data */
+    int receiving_packet = 0;   /* Keeps track of whether there are parts of packets waiting to be parsed in the input handler */
 
     for (;;)
     {
@@ -297,7 +317,7 @@ void serial_read_task(void *params)
                 data[event.size] = 0;   /* Append 0 to end of data for certainty */
                 uart_read_bytes(UART_INSTANCE, data, event.size, 2);
                 ESP_LOGI(SERIAL_TAG, "DATA HERE! Size: %d", event.size);
-                handle_serial_input(data, event.size);
+                receiving_packet = handle_serial_input(data, event.size, receiving_packet);
                 free(data);
                 data = NULL;
                 break;
@@ -364,13 +384,6 @@ void serial_write_task(void *params)
 }
 
 
-// void test() 
-// {
-//     char *data = malloc(PACKET_DATA_SIZE);
-//     memset(data, 65, PACKET_DATA_SIZE);
-//     send_data_as_one_packet(data, PACKET_DATA_SIZE, 0, 0);
-// }
-
 void app_main(void)
 {
     init_uart_0(115200);
@@ -381,7 +394,7 @@ void app_main(void)
     uart_write_handle = xQueueCreate(10, sizeof(uart_write_evt_t));
     packet_queue = xQueueCreate(5, sizeof(packet));
 
-    TaskHandle_t uart_read_task, uart_write_task, packet_task; // Throwaway vars
+    TaskHandle_t uart_read_task, uart_write_task, packet_task; // Throwaway vars, but needed
 
     /* Create and begin tasks located in functions given by first argument */
     xTaskCreate(serial_read_task, "Uart0 Queue Task", 2048, 
