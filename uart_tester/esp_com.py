@@ -100,9 +100,9 @@ TAG_SERIAL = 1
 TAG_SERIAL_FLUSH = 2
 TAG_CMD = 3
 
-PACKET_SIZE = 256
+PACKET_DATA_SIZE = 256
 DATA_HEADER = codecs.encode("DATA\x00")
-DATA_FOOTER = codecs.encode("END\x00")
+DATA_FOOTER = codecs.encode("END\n")
 PACKET_SIZE = 256
 
 
@@ -298,6 +298,7 @@ class FadMonitor(object):
         self.console_parser = ConsoleParser(eol)
         self.console_reader = ConsoleReader(self.console, self.event_queue, self.cmd_queue, self.console_parser)
         self.serial_reader = SerialReader(self.serial, self.event_queue)
+        self.packet_handler = FadSerialPacketHandler(send_data)
         self.original_data = send_data
         self.data_array = self.partition_data(send_data, send_data_byte_size)
 
@@ -306,7 +307,8 @@ class FadMonitor(object):
         self._invoke_processing_last_line_timer = None
         self._receiving_packet = False
         self.receive_buffer = []
-
+    
+    
     def partition_data(self, data_to_send, int_size_in_bytes):
         total_length = len(data_to_send)
         data_array = []
@@ -316,7 +318,7 @@ class FadMonitor(object):
             data_as_bytes = b''
             for j in range(array_vals_per_packet): # each int pos is equivalent to size
                 data_pos = i * array_vals_per_packet + j
-                data_as_bytes += data_to_send[data_pos].to_bytes(2, byteorder='big')
+                data_as_bytes += data_to_send[data_pos].to_bytes(2, byteorder='little')
 
             data_array.append(data_as_bytes)
         
@@ -381,7 +383,7 @@ class FadMonitor(object):
 
         for line in sp:
             if line[0:4] == DATA_HEADER[0:4]:
-                self.handle_packet(line)
+                self.packet_handler.add_packet(line)
             else: 
                 self._print(line + b'\n')
 
@@ -391,24 +393,16 @@ class FadMonitor(object):
     
     def send_data(self):
         n = len(self.data_array)
-        b = lambda x: x.to_bytes(1, byteorder='big') # used to convert 1 int to a byte
+        b = lambda x: x.to_bytes(2, byteorder='little') # used to convert 1 int to a byte
         bytes_sent = 0
         for i in range(n):
             bytes_sent += self.serial.write(DATA_HEADER)
-            bytes_sent += self.serial.write(b'DT\x00')
+            bytes_sent += self.serial.write(b'U1\0')
             bytes_sent += self.serial.write(self.data_array[i])
+            bytes_sent += self.serial.write(b(n - i - 1) + b'\0\0')
             bytes_sent += self.serial.write(DATA_FOOTER)
-            bytes_sent += self.serial.write(b(n - i - 1) + b(i) + b'\0')
-            bytes_sent += self.serial.write(b'\x00\n')
-            # For testing purposes, add artificial delay
-            # for i in range(1000000):
-            #     if (i % 2):
-            #         bytes_sent += 1
-            #     else:
-            #         bytes_sent -= 1
-
-            print("Wrote packet, bytes sent:", bytes_sent)
-            bytes_sent = 0
+            print("Wrote packet, bytes sent:", bytes_sent) 
+            bytes_sent = 0 
 
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):
@@ -419,22 +413,51 @@ class FadMonitor(object):
             self.serial_reader.stop()
             self.console_reader.stop()
 
-    def handle_packet(self, packet):
-        try:
-            new_packet = FadSerialPacket(packet)
-            print("PACKET RECEIVED")
-            self.add_packet_to_receive_buffer(new_packet)
-            
-        except TypeError as err:
-            print(repr(err))
-            new_packet = None
-            return
-    
-    def add_packet_to_receive_buffer(self, packet):
-        self.receive_buffer.append(packet)
-        if packet.packets_incoming == 0:
-            self.display_received_packets()
+    def _print(self, string):
+        self.console.write_bytes(string)
 
+class FadSerialPacketHandler():
+
+    class FadPacket():
+        '''This class defines the components of a serial data packet
+        which holds simulated audio data to be sent between the ESP32
+        and the python serial program. The data consists of a header with
+        a Name and a type e.g. b'DATA/0U1/0' (but back slashes) denotes a fad packet
+        with a data type of 'U1', or a packet of char values.'''
+        def __init__(self, data):
+            err = self.bad_data(data)
+            if err:
+                raise TypeError(err)
+            self.data = data[8:PACKET_DATA_SIZE  + 8]
+            self.type = data[5:7]
+            self.packets_incoming = int.from_bytes(data[-7:-5], byteorder='little')
+            self.error_id = int.from_bytes(data[-5:-3], byteorder='little')
+
+        def bad_data(self, data):
+            if data[0:4] != DATA_HEADER[0:4]:
+                return "Invalid Header" 
+
+            elif data[-3:] != DATA_FOOTER[0:3]:
+                print()
+                return "Invalid footer" 
+
+
+    def __init__(self, send_data):
+        self.receive_buffer = []
+        self.send_data = send_data
+        
+    def add_packet(self, packet_data):
+        try:
+            packet = self.FadPacket(packet_data)
+            self.receive_buffer.append(packet)
+            print(packet.packets_incoming)
+            if packet.packets_incoming == 0:
+                self.display_received_packets()
+
+        except TypeError as err:
+            # for now, just print
+            print(repr(err))
+        
     def display_received_packets(self):
         # Stitch together data within packets
         all_data = []   # Holds stitched data from each received packet
@@ -443,35 +466,9 @@ class FadMonitor(object):
             for data in packet_data:
                 all_data.append(data)
 
-        dsp_tools.plot([all_data], labels=["Packet Data"])
+        dsp_tools.plot([all_data, self.send_data], labels=["Packet Data", "Input Data"])
         dsp_tools.show()
 
-    def _print(self, string):
-        self.console.write_bytes(string)
-
-class FadSerialPacket():
-    '''This class defines the components of a serial data packet
-    which holds simulated audio data to be sent between the ESP32
-    and the python serial program. The data consists of a header with
-    a Name and a length e.g. b'DATA/0/x10/x10' (but back slashes) denotes a fad packet
-    with a length of 0x1010, or a very large length.'''
-
-    def __init__(self, data):
-        err = self.bad_data(data)
-        if err != None:
-            raise TypeError(err)            
-
-        self.data = data[8 : PACKET_SIZE + 8]   # Data as bytes
-        self.type = data[5:6]
-        self.packets_incoming = int(data[PACKET_SIZE + 12])
-        self.packets_previous = int(data[PACKET_SIZE + 13])
-        
-    def bad_data(self, data):
-        if data[0:4] != DATA_HEADER[0:4]:
-            return "Invalid Header" 
-
-        elif data[-7:-4] != DATA_FOOTER[0:3]:
-            return "Invalid footer" 
 
     def __str__(self):
         return f'Data: {self.data.hex()}'
@@ -497,7 +494,7 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    my_data = dsp_tools.to_discrete(512 * dsp_tools.square_wave(20, 512)) # Square wave with amplitude 512 and width 20
+    my_data = dsp_tools.to_discrete(2000 * dsp_tools.sine_wave(20, 512)) # Square wave with amplitude 512 and width 20
 
     monitor = FadMonitor(serial_instance, send_data=my_data)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(

@@ -44,6 +44,13 @@ def square_wave(wave_width, length = size):
             x += wave_width
     return output
 
+def sine_wave(wave_width, length = size):
+    ret = np.zeros(length)
+    for i in range(length):
+        ret[i] = 1 + math.sin(2 * math.pi * i / wave_width)
+    return ret
+
+
 def discrete_square_wave(wave_width, length):
     return to_discrete(square_wave(wave_width, length))
 

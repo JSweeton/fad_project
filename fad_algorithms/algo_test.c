@@ -10,11 +10,12 @@
  */
 
 #include "algo_test.h"
+#include "esp_log.h"
 
 void algo_test(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
     for (int i = 0; i < algo_test_size / multisamples; i++) {
-        out_buff[out_pos + i] = (i % 2) ? 255 : 0;
+        out_buff[out_pos + i] = in_buff[in_pos + (i * multisamples)] >> 4;
     }
 }
 

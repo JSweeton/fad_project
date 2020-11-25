@@ -28,6 +28,7 @@
 
 #include "algo_test.h"
 #include "fad_defs.h"
+#include "algo_white.h"
 
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (1024)
@@ -49,22 +50,20 @@ typedef struct uart_write_evt_t {
     uint8_t *data;          /* The data to be written to the handler */
     int size;               /* The size, in bytes, of the data to be copied */
     char num_to_follow;     /* For a packet, number of packets that are coming after */
-    char num_sent;          /* For a packet, number of packets that came before */
+    char error_id;          /* For a packet, number of packets that came before */
 } uart_write_evt_t;
 
 typedef struct packet {
     char header[5];                 /* Data header, as described in intro */
-    char type[3];
+    char type[3];                   /* Type, two-letter string like "U1" or "U2" */
     char data[PACKET_DATA_SIZE];    /* The bytes of data as raw bytes */
+    uint16_t packets_incoming;      /* The number of packets planned to follow */
+    uint16_t packet_missed_id;      /* 0 if no errors, packets_incoming of missed packet if there is one */
     char footer[4];                 /* The footer of the data, e.g. "END/0/n" */
-    char packets_left;              /* 1 byte indicating packets left */
-    char packets_previous;          /* 1 byte indicating how many previous packets */
-    char tail[2];
 } packet;
 
 uint8_t packet_buffer[PACKET_TOTAL_SIZE + 1] = "";  /* Holds the contents of partial packets */
 int packet_buffer_pos = 0;  /* Tracks where to paste next into packet buffer */
-int receiving_packet = 0;   /* Tracks whether we are in the middle of receiving a packet */
 
 QueueHandle_t uart_handle;
 QueueHandle_t uart_write_handle;
@@ -73,7 +72,7 @@ algo_func_t fad_algo;
 
 const char SERIAL_TAG[] = "FAD_SERIAL";
 const char PACKET_HEADER[] = "DATA\0";
-const char PACKET_FOOTER[] = "END\0";
+const char PACKET_FOOTER[] = "END\n";
 const char STOP_MSG[] = "STOPSIG\n";
 const int STOP_MSG_LENGTH = 8;
 
@@ -108,7 +107,7 @@ void init_uart_0(int baud_rate)
  */
 void send_packet_to_queue(packet *p)
 {
-    if( strncmp(p->footer, "ENDSIG", 6) == 0 ) /* Verify packet ends with the footer */
+    if( strncmp(p->footer, "END", 3) == 0 ) /* Verify packet ends with the footer */
         xQueueSend( packet_queue, (void *)p, (portTickType)portMAX_DELAY );
     else ESP_LOGI(SERIAL_TAG, "Bad Packet noticed in send_packet_to_queue!");
 }
@@ -120,7 +119,7 @@ void send_packet_to_queue(packet *p)
  * @param data Pointer to the data to be sent. Will be freed through UART Write Queue
  * @param size The size of the data to be sent. Has to be 256 to work, meant to programatically confirm data size.
  */
-void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int num_prev)
+void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int error_id)
 {
     if (data != NULL && size == PACKET_DATA_SIZE)
     {
@@ -129,7 +128,7 @@ void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int num
         msg.size = size; 
         msg.data = data;
         msg.num_to_follow = num_to_follow;
-        msg.num_sent = num_prev;
+        msg.error_id = error_id;
 
         xQueueSend(uart_write_handle, (void *)&msg, (portTickType)portMAX_DELAY);
     }
@@ -193,6 +192,7 @@ int handle_start_of_packet(char *data, int size)
         {
             return handle_start_of_packet(data_string, size - (char)(data_string - data));
         }
+        return 0;
     }
 }
 
@@ -240,10 +240,12 @@ int handle_serial_input(char *data, int size, int receiving_packet)
         return 0;
 
     /* We are not in the middle of receiving a packet, so search this packet for header */
-    if (!receiving_packet) return handle_start_of_packet(data, size);     
+    if (!receiving_packet) 
+        return handle_start_of_packet(data, size);     
 
     /* we are previously receiving packet, so check how much we have in buffer and copy into buffer */
-    else return continue_handling_packet(data, size);  
+    else 
+        return continue_handling_packet(data, size);  
 }
 
 
@@ -262,25 +264,26 @@ void packet_handler_task(void *params)
         if (xQueueReceive(packet_queue, (void *)&p, (portTickType)portMAX_DELAY) == pdPASS)
         {
            /* Incoming packets are formatted as sequential 16-bit values. Need two input packets to create 1 output packet */
-            ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d, past: %d", p.packets_left, p.packets_previous);
+            ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d", p.packets_incoming);
 
             int write_pos = PACKET_DATA_SIZE / 2;
 
-            if (p.packets_left % 2 == 1)    /* This means this packet is the first of a pair (since "odd" packets have even packets left) */
+            if (p.packets_incoming % 2 == 1)    /* This means this packet is the first of a pair (since "odd" packets have even packets left) */
             {
                 output_data = (uint8_t *)malloc(PACKET_DATA_SIZE); /* Reallocate output data to a new address for fresh memory (prevents corrupting... */
                 write_pos = 0;                                     /* ...previous packets before they've been written) */
             }
 
             ESP_LOGI(SERIAL_TAG, "Beginning algo...");
-            fad_algo((uint16_t *)p.data, output_data, 0, write_pos, 1);
+            fad_algo((uint16_t *)p.data, output_data + write_pos, 0, 0, 1);
 
             if (write_pos == 128)   /* Packet is ready! Send out with appropriate data */
             {
                 /* If the first packet comes in with 3 remaining, that means four packets are input, so 2 must be output (or 1 remaining) */
                 /* If the first packet comes in with 7 remaining, that means 8 packets are input, so 4 must be output (or 3 remaining) */
-                int num_to_follow = p.packets_left / 2; 
-                send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, num_sent);
+                int num_to_follow = p.packets_incoming / 2; 
+                uint16_t error_id = 0;
+                send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, error_id);
                 ESP_LOGI(SERIAL_TAG, "PACKET SENT OUT, remaining to send: %d, past sent: %d", num_to_follow, num_sent);
                 num_sent++;
             }
@@ -356,11 +359,13 @@ void serial_write_task(void *params)
             possibly blocking until there is space */
             case SEND_PACKET: ;
                 if (event.size != 256) break;
-                char pos_data[3] = {event.num_to_follow, event.num_sent, 0};
+                char type_data[3] = "U1";
                 uart_write_bytes(UART_INSTANCE, PACKET_HEADER, 5);
-                uart_write_bytes(UART_INSTANCE, pos_data, 3);
+                uart_write_bytes(UART_INSTANCE, type_data, 3);
                 uart_write_bytes(UART_INSTANCE, (void *)event.data, event.size);
-                uart_write_bytes(UART_INSTANCE, PACKET_FOOTER, 8);
+                uint16_t pos_data[2] = {event.num_to_follow, event.error_id};
+                uart_write_bytes(UART_INSTANCE, (void *)pos_data, 4);
+                uart_write_bytes(UART_INSTANCE, PACKET_FOOTER, 4);
                 break;
             case SEND_MSG:
                 ESP_LOGI(SERIAL_TAG, "%s", event.data);
@@ -387,8 +392,10 @@ void serial_write_task(void *params)
 void app_main(void)
 {
     init_uart_0(115200);
-    algo_test_init(128);
-    fad_algo = algo_test;
+    // algo_white_init(128);
+    // fad_algo = algo_white;
+    algo_white_init(128);
+    fad_algo = algo_white;
 
     /* Create queues for Uart Write task and Packet Handler task */
     uart_write_handle = xQueueCreate(10, sizeof(uart_write_evt_t));
