@@ -25,7 +25,7 @@ void algo_white(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
 	}
 
 	uint16_t diff = (max - min) >> 4; /* Bit shift 4 times to turn 12 bit ADC input to 8 bit char */
-	ESP_LOGI("ALGO", "diff: %d", diff);
+	// ESP_LOGI("ALGO", "diff: %d", diff);
 	out_buff[0] = 0x7F;
 
 

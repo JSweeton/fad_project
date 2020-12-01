@@ -58,7 +58,7 @@ from io import open
 import textwrap
 import tempfile
 import json
-import dsp_tools
+import dsp_tools as dt
 
 try:
     import websocket
@@ -392,17 +392,16 @@ class FadMonitor(object):
             self._last_line_part = b''
     
     def send_data(self):
+        print("Beginning packet transmission...")
         n = len(self.data_array)
         b = lambda x: x.to_bytes(2, byteorder='little') # used to convert 1 int to a byte
-        bytes_sent = 0
         for i in range(n):
-            bytes_sent += self.serial.write(DATA_HEADER)
-            bytes_sent += self.serial.write(b'U1\0')
-            bytes_sent += self.serial.write(self.data_array[i])
-            bytes_sent += self.serial.write(b(n - i - 1) + b'\0\0')
-            bytes_sent += self.serial.write(DATA_FOOTER)
-            print("Wrote packet, bytes sent:", bytes_sent) 
-            bytes_sent = 0 
+            self.serial.write(DATA_HEADER)
+            self.serial.write(b'U1\0')
+            self.serial.write(self.data_array[i])
+            self.serial.write(b(n - i - 1) + b'\0\0')
+            self.serial.write(DATA_FOOTER)
+        print("Finished transmission")
 
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):
@@ -445,18 +444,38 @@ class FadSerialPacketHandler():
     def __init__(self, send_data):
         self.receive_buffer = []
         self.send_data = send_data
+        self.first_packet = False
+        self.last_packet = 0 
         
     def add_packet(self, packet_data):
+
         try:
             packet = self.FadPacket(packet_data)
             self.receive_buffer.append(packet)
-            print(packet.packets_incoming)
+
+            # Check for missed packets
+            packet_jump = self.last_packet - packet.packets_incoming
+            if (self.first_packet and packet_jump != 1):
+                print(f"Missed {packet_jump - 1} packets after " + str(packet.packets_incoming + packet_jump))
+
+            self.last_packet = packet.packets_incoming
+
             if packet.packets_incoming == 0:
                 self.display_received_packets()
+                self.clear_data()
 
         except TypeError as err:
             # for now, just print
             print(repr(err))
+        
+
+        if not self.first_packet:
+            self.first_packet = True
+
+    def clear_data(self):
+        self.receive_buffer = []
+        self.first_packet = False
+        self.last_packet = 0
         
     def display_received_packets(self):
         # Stitch together data within packets
@@ -464,10 +483,11 @@ class FadSerialPacketHandler():
         for packet in self.receive_buffer:
             packet_data = list(packet.data)
             for data in packet_data:
-                all_data.append(data)
+                all_data.append(data * 16)
 
-        dsp_tools.plot([all_data, self.send_data], labels=["Packet Data", "Input Data"])
-        dsp_tools.show()
+        dt.play(dt.center(all_data))
+        dt.plot([all_data, self.send_data], labels=["Packet Data", "Input Data"])
+        dt.show()
 
 
     def __str__(self):
@@ -494,7 +514,7 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    my_data = dsp_tools.to_discrete(2000 * dsp_tools.sine_wave(20, 512)) # Square wave with amplitude 512 and width 20
+    my_data = dt.to_discrete(2000 * dt.get_song(2)[60000:]) # Square wave with amplitude 512 and width 20
 
     monitor = FadMonitor(serial_instance, send_data=my_data)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(

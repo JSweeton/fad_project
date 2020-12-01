@@ -16,6 +16,16 @@ def normalize(array):
     array = array / np.sum(array)
     return array
 
+def center(array):
+    array = array - np.average(array)
+    array = array / (np.max(array) - np.min(array))
+    return array
+
+def flatten(array):
+    array = array / (np.max(array) - np.min(array))
+    array = array - np.min(array)
+    return array
+
 # def noise(length = size):
 #     return np.random.random(length) - 0.5
 
@@ -173,7 +183,7 @@ def get_song(time):
 
     trunc_signal = song_signal[1950000:1950000 + int(sampling_rate * time)]
 
-    return trunc_signal
+    return flatten(trunc_signal)
 
 def signal_feeder(s, pll_func, buff_size = 1):
     output = []
@@ -204,6 +214,7 @@ def plot(signals, labels, title: str = "Figure"):
     fig.suptitle(title)
 
 def play(s):
+    import sounddevice as sd
     sd.play(s, 48000)
 
 def show():

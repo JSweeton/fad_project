@@ -264,7 +264,7 @@ void packet_handler_task(void *params)
         if (xQueueReceive(packet_queue, (void *)&p, (portTickType)portMAX_DELAY) == pdPASS)
         {
            /* Incoming packets are formatted as sequential 16-bit values. Need two input packets to create 1 output packet */
-            ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d", p.packets_incoming);
+            // ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d", p.packets_incoming);
 
             int write_pos = PACKET_DATA_SIZE / 2;
 
@@ -274,7 +274,7 @@ void packet_handler_task(void *params)
                 write_pos = 0;                                     /* ...previous packets before they've been written) */
             }
 
-            ESP_LOGI(SERIAL_TAG, "Beginning algo...");
+            // ESP_LOGI(SERIAL_TAG, "Beginning algo...");
             fad_algo((uint16_t *)p.data, output_data + write_pos, 0, 0, 1);
 
             if (write_pos == 128)   /* Packet is ready! Send out with appropriate data */
@@ -284,7 +284,7 @@ void packet_handler_task(void *params)
                 int num_to_follow = p.packets_incoming / 2; 
                 uint16_t error_id = 0;
                 send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, error_id);
-                ESP_LOGI(SERIAL_TAG, "PACKET SENT OUT, remaining to send: %d, past sent: %d", num_to_follow, num_sent);
+                // ESP_LOGI(SERIAL_TAG, "PACKET SENT OUT, remaining to send: %d, past sent: %d", num_to_follow, num_sent);
                 num_sent++;
             }
             
@@ -319,7 +319,7 @@ void serial_read_task(void *params)
                 char *data = (char *)malloc(sizeof(char) * event.size + 1);
                 data[event.size] = 0;   /* Append 0 to end of data for certainty */
                 uart_read_bytes(UART_INSTANCE, data, event.size, 2);
-                ESP_LOGI(SERIAL_TAG, "DATA HERE! Size: %d", event.size);
+                // ESP_LOGI(SERIAL_TAG, "DATA HERE! Size: %d", event.size);
                 receiving_packet = handle_serial_input(data, event.size, receiving_packet);
                 free(data);
                 data = NULL;
@@ -329,8 +329,8 @@ void serial_read_task(void *params)
                 ESP_LOGI(SERIAL_TAG, "[BUFFER_FULL]:");
                 break;
 
-            default:
-                ESP_LOGI(SERIAL_TAG, "[NOT HANDLED]: %d", event.type);
+            default:;
+                // ESP_LOGI(SERIAL_TAG, "[NOT HANDLED]: %d", event.type);
             }
         }
     }
