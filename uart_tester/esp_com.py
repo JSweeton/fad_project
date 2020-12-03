@@ -105,6 +105,15 @@ DATA_HEADER = codecs.encode("DATA\x00")
 DATA_FOOTER = codecs.encode("END\n")
 PACKET_SIZE = 256
 
+# Algorithm Choices (enum-like)
+ALGO_WHITE_V1_0 = b'ALGO_WHITE_V1_0' 
+ALGO_TEST = b'ALGO_TEST'
+
+# Data Types (bytes-like)
+ONE_BYTE_UNSIGNED = b'U1\0'
+TWO_BYTE_UNSIGNED = b'U2\0'
+ALGORITHM_SELECT = b'AS\0'
+
 
 class StoppableThread(object):
     """
@@ -277,38 +286,53 @@ class SerialStopException(Exception):
     """
     pass
 
-class FadMonitor(object):
-    '''
-    Monitor class for ESP32, for use with FAD project. Has ability to send and receive
-    chunks of data for the ESP32 to process, and for this program to display. Send data should
-    be formatted as integer array
-    '''
+class FadSerialPacketHandler():
 
-    def __init__(self, serial_instance, eol="CRLF", send_data=b'None', send_data_byte_size = 2):
-        super(FadMonitor, self).__init__()
-        self.event_queue = queue.Queue()
-        self.cmd_queue = queue.Queue()
-        self.console = miniterm.Console() 
-        # if os.name == 'nt':
-        #     sys.stderr = ANSIColorConverter(sys.stderr, decode_output=True)
-        #     self.console.output = ANSIColorConverter(self.console.output)
-        #     self.console.byte_output = ANSIColorConverter(self.console.byte_output)
+    class FadPacket():
+        '''This class defines the components of a serial data packet
+        which holds simulated audio data to be sent between the ESP32
+        and the python serial program. The data consists of a header with
+        a Name and a type e.g. b'DATA/0U1/0' (but back slashes) denotes a fad packet
+        with a data type of 'U1', or a packet of char values.'''
+        def __init__(self, data):
+            err = self.bad_data(data)
+            if err:
+                raise TypeError(err)
+            self.data = data[8:PACKET_DATA_SIZE  + 8]
+            self.type = data[5:7]
+            self.packets_incoming = int.from_bytes(data[-7:-5], byteorder='little')
+            self.error_id = int.from_bytes(data[-5:-3], byteorder='little')
 
-        self.serial = serial_instance
-        self.console_parser = ConsoleParser(eol)
-        self.console_reader = ConsoleReader(self.console, self.event_queue, self.cmd_queue, self.console_parser)
-        self.serial_reader = SerialReader(self.serial, self.event_queue)
-        self.packet_handler = FadSerialPacketHandler(send_data)
-        self.original_data = send_data
-        self.data_array = self.partition_data(send_data, send_data_byte_size)
+        def bad_data(self, data):
+            if data[0:4] != DATA_HEADER[0:4]:
+                return "Invalid Header" 
 
-        self.last_packet = []
-        self._last_line_part = b''
-        self._invoke_processing_last_line_timer = None
-        self._receiving_packet = False
+            elif data[-3:] != DATA_FOOTER[0:3]:
+                print()
+                return "Invalid footer" 
+
+        def __str__(self):
+            return f'Data: {self.data.hex()}'
+
+    PACKET_DUMP_SIZE = 10   # Sets the number of packets sent at a time
+    def __init__(self, send_data, algorithms, byte_size):
         self.receive_buffer = []
-    
-    
+
+        self.original_data = send_data
+        self.in_data = self.partition_data(send_data, byte_size)
+        self.in_data_pos = 0 
+        self.in_data_len = len(self.in_data)
+        self.missed_packet_queue = queue.Queue()
+
+        self.algorithms = algorithms
+        self.algorithms_pos = len(algorithms)
+
+        self.first_packet = False   # keeps track of whether a first packet has been received
+        self.last_packet = 0        # keeps track of number of last packet
+        self.message = ''
+        self.finished_algorithm = False
+        self.ignore_dump = False
+        
     def partition_data(self, data_to_send, int_size_in_bytes):
         total_length = len(data_to_send)
         data_array = []
@@ -318,12 +342,133 @@ class FadMonitor(object):
             data_as_bytes = b''
             for j in range(array_vals_per_packet): # each int pos is equivalent to size
                 data_pos = i * array_vals_per_packet + j
-                data_as_bytes += data_to_send[data_pos].to_bytes(2, byteorder='little')
+                data_as_bytes += data_to_send[data_pos].to_bytes(int_size_in_bytes, byteorder='little')
 
             data_array.append(data_as_bytes)
         
         return data_array
 
+    def add_packet(self, packet_data):
+
+        try:
+            packet = self.FadPacket(packet_data)
+            self.receive_buffer.append(packet)
+
+            # Check for missed packets
+            packet_jump = self.last_packet - packet.packets_incoming
+            if (self.first_packet and packet_jump != 1):
+                print(f"Missed {packet_jump - 1} packets after " + str(packet.packets_incoming + packet_jump))
+
+            self.last_packet = packet.packets_incoming
+
+            if packet.packets_incoming == 0:
+                self.display_received_packets()
+                self.clear_data()
+
+        except TypeError as err:
+            # for now, just print
+            print(repr(err))
+        
+
+        if not self.first_packet:
+            self.first_packet = True
+        
+    def next_packet(self):
+        '''Returns the next packet to be sent, based on last packet sent. Returns None if none left'''
+
+        packets_left = self.in_data_len - self.in_data_pos - 1
+
+        if (packets_left < 0):
+            self.message = f"Finished current packet set. Algorithms remaining: {self.algorithms_pos + 1}"
+            self.finished_algorithm = True
+            return None
+
+        if ((packets_left + 1) % self.PACKET_DUMP_SIZE == 0 and not self.ignore_dump):
+            self.message = f"Packet dump sent. Continue, packets left: {packets_left}"
+            self.ignore_dump = True
+            return None
+
+        self.ignore_dump = False 
+
+        try:
+            missed_packet = self.missed_packet_queue.get_nowait()
+        except queue.Empty:
+            missed_packet = 0
+
+        packet = self._create_generic_packet(self.in_data[self.in_data_pos], ONE_BYTE_UNSIGNED, packets_left, missed_packet)
+        self.in_data_pos += 1
+
+        return packet
+
+
+    
+    def initial_packet(self):
+        '''Returns an initiation packet based on next algorithm choice'''
+        self.algorithms_pos -= 1
+
+        if (self.finished_algorithm == False):
+            return None
+
+        if (self.algorithms_pos < 0):
+            self.message = "Out of algorithms."
+            self.algorithms_pos = len(self.algorithms)
+            return None
+
+        algo = self.algorithms[self.algorithms_pos] 
+        data = algo + b'\0' * (PACKET_DATA_SIZE - len(algo))
+        self.finished_algorithm = False
+        return self._create_generic_packet(data, ALGORITHM_SELECT, len(self.in_data), 0)
+
+    def _create_generic_packet(self, data, data_type, packets_left, packets_missed):
+            packet = DATA_HEADER
+            packet += data_type
+            packet += data
+            packet += packets_left.to_bytes(2, byteorder='little')
+            packet += packets_missed.to_bytes(2, byteorder='little')
+            packet += DATA_FOOTER
+            return packet
+
+    def clear_data(self):
+        self.receive_buffer = []
+        self.first_packet = False
+        self.last_packet = 0
+        
+    def display_received_packets(self):
+        # Stitch together data within packets
+        all_data = []   # Holds stitched data from each received packet
+        for packet in self.receive_buffer:
+            packet_data = list(packet.data)
+            for data in packet_data:
+                all_data.append(data * 16)
+
+        dt.play(dt.center(all_data))
+        dt.plot([all_data, self.original_data], labels=["Packet Data", "Input Data"])
+        dt.show()
+
+class FadMonitor(object):
+    '''
+    Monitor class for ESP32, for use with FAD project. Has ability to send and receive
+    chunks of data for the ESP32 to process, and for this program to display. Send data should
+    be formatted as integer array
+    '''
+
+    def __init__(self, serial_instance, eol="CRLF", send_data=b'None', test_algorithms=[ALGO_TEST], send_data_byte_size = 2):
+        super(FadMonitor, self).__init__()
+        self.event_queue = queue.Queue()
+        self.cmd_queue = queue.Queue()
+        self.console = miniterm.Console() 
+
+        self.serial = serial_instance
+        self.console_parser = ConsoleParser(eol)
+        self.console_reader = ConsoleReader(self.console, self.event_queue, self.cmd_queue, self.console_parser)
+        self.serial_reader = SerialReader(self.serial, self.event_queue)
+        self.packet_handler = FadSerialPacketHandler(send_data, test_algorithms, send_data_byte_size)
+
+        self._last_line_part = b''
+        self._invoke_processing_last_line_timer = None
+        self._receiving_packet = False
+        self._packet_buffer = b''
+    
     def _invoke_processing_last_line(self):
         self.event_queue.put((TAG_SERIAL_FLUSH, b''), False)
 
@@ -383,7 +528,20 @@ class FadMonitor(object):
 
         for line in sp:
             if line[0:4] == DATA_HEADER[0:4]:
-                self.packet_handler.add_packet(line)
+                if len(line) == 271:    # Checks to make sure there were no line breaks within packet
+                    self.packet_handler.add_packet(line)
+                    self._receiving_packet = False
+                else:
+                    self._receiving_packet = True
+                    self._packet_buffer = line + b'\n'
+            
+            elif self._receiving_packet:  # This means a packet has been started but cut off by line breaks.
+                if (len(line) > 2 and line[-3:] == DATA_FOOTER[0:3]):
+                    self.packet_handler.add_packet(self._packet_buffer + line)
+                    self._receiving_packet = False
+                else:
+                    self._packet_buffer += line + b'\n'
+
             else: 
                 self._print(line + b'\n')
 
@@ -393,15 +551,13 @@ class FadMonitor(object):
     
     def send_data(self):
         print("Beginning packet transmission...")
-        n = len(self.data_array)
-        b = lambda x: x.to_bytes(2, byteorder='little') # used to convert 1 int to a byte
-        for i in range(n):
-            self.serial.write(DATA_HEADER)
-            self.serial.write(b'U1\0')
-            self.serial.write(self.data_array[i])
-            self.serial.write(b(n - i - 1) + b'\0\0')
-            self.serial.write(DATA_FOOTER)
-        print("Finished transmission")
+        # packet = self.packet_handler.initial_packet() 
+        packet = b''
+        while packet != None:
+            self.serial.write(packet)
+            packet = self.packet_handler.next_packet()
+
+        print(self.packet_handler.message)
 
     def handle_commands(self, cmd):
         if (cmd == CMD_SEND_DATA):
@@ -415,83 +571,6 @@ class FadMonitor(object):
     def _print(self, string):
         self.console.write_bytes(string)
 
-class FadSerialPacketHandler():
-
-    class FadPacket():
-        '''This class defines the components of a serial data packet
-        which holds simulated audio data to be sent between the ESP32
-        and the python serial program. The data consists of a header with
-        a Name and a type e.g. b'DATA/0U1/0' (but back slashes) denotes a fad packet
-        with a data type of 'U1', or a packet of char values.'''
-        def __init__(self, data):
-            err = self.bad_data(data)
-            if err:
-                raise TypeError(err)
-            self.data = data[8:PACKET_DATA_SIZE  + 8]
-            self.type = data[5:7]
-            self.packets_incoming = int.from_bytes(data[-7:-5], byteorder='little')
-            self.error_id = int.from_bytes(data[-5:-3], byteorder='little')
-
-        def bad_data(self, data):
-            if data[0:4] != DATA_HEADER[0:4]:
-                return "Invalid Header" 
-
-            elif data[-3:] != DATA_FOOTER[0:3]:
-                print()
-                return "Invalid footer" 
-
-
-    def __init__(self, send_data):
-        self.receive_buffer = []
-        self.send_data = send_data
-        self.first_packet = False
-        self.last_packet = 0 
-        
-    def add_packet(self, packet_data):
-
-        try:
-            packet = self.FadPacket(packet_data)
-            self.receive_buffer.append(packet)
-
-            # Check for missed packets
-            packet_jump = self.last_packet - packet.packets_incoming
-            if (self.first_packet and packet_jump != 1):
-                print(f"Missed {packet_jump - 1} packets after " + str(packet.packets_incoming + packet_jump))
-
-            self.last_packet = packet.packets_incoming
-
-            if packet.packets_incoming == 0:
-                self.display_received_packets()
-                self.clear_data()
-
-        except TypeError as err:
-            # for now, just print
-            print(repr(err))
-        
-
-        if not self.first_packet:
-            self.first_packet = True
-
-    def clear_data(self):
-        self.receive_buffer = []
-        self.first_packet = False
-        self.last_packet = 0
-        
-    def display_received_packets(self):
-        # Stitch together data within packets
-        all_data = []   # Holds stitched data from each received packet
-        for packet in self.receive_buffer:
-            packet_data = list(packet.data)
-            for data in packet_data:
-                all_data.append(data * 16)
-
-        dt.play(dt.center(all_data))
-        dt.plot([all_data, self.send_data], labels=["Packet Data", "Input Data"])
-        dt.show()
-
-
-    def __str__(self):
-        return f'Data: {self.data.hex()}'
 
 def main():
     def _get_default_serial_port():
@@ -514,9 +593,17 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    my_data = dt.to_discrete(2000 * dt.get_song(2)[60000:]) # Square wave with amplitude 512 and width 20
+    large_song = dt.get_song(2)[64640:95360]
+    small_song = dt.get_song(2)[80000:88192]
+    one_packet = small_song[0:256]
+    my_packet = dt.discrete_square_wave(20, 256)
+    for i in range(255):
+        my_packet[i] += 30 
 
-    monitor = FadMonitor(serial_instance, send_data=my_data)
+    my_packet[5] = 0
+    my_data = dt.to_discrete(my_packet) # Square wave with amplitude 512 and width 20
+
+    monitor = FadMonitor(serial_instance, send_data=my_data, send_data_byte_size=1)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
         p=serial_instance))
 

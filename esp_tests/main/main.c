@@ -37,33 +37,36 @@
 #define PACKET_TOTAL_SIZE (PACKET_DATA_SIZE + 16)
 #define UART_INSTANCE UART_NUM_0
 
-enum write_cmd {
-    SEND_PACKET = 0,    /* Send data as a packet */
-    SEND_MSG,           /* Send data as ESP_LOG */
-    SEND_STOP,          /* Send STOP message */
-    SEND_GENERIC,       /* Send data string as straight serial data */
-    SEND_TEST,          /* Test cmd for bug testing */
+enum write_cmd
+{
+    SEND_PACKET = 0, /* Send data as a packet */
+    SEND_MSG,        /* Send data as ESP_LOG */
+    SEND_STOP,       /* Send STOP message */
+    SEND_GENERIC,    /* Send data string as straight serial data */
+    SEND_TEST,       /* Test cmd for bug testing */
 };
 
-typedef struct uart_write_evt_t {
-    enum write_cmd cmd;     /* The commands for the uart write handler. */
-    uint8_t *data;          /* The data to be written to the handler */
-    int size;               /* The size, in bytes, of the data to be copied */
-    char num_to_follow;     /* For a packet, number of packets that are coming after */
-    char error_id;          /* For a packet, number of packets that came before */
+typedef struct uart_write_evt_t
+{
+    enum write_cmd cmd; /* The commands for the uart write handler. */
+    uint8_t *data;      /* The data to be written to the handler */
+    int size;           /* The size, in bytes, of the data to be copied */
+    char num_to_follow; /* For a packet, number of packets that are coming after */
+    char error_id;      /* For a packet, number of packets that came before */
 } uart_write_evt_t;
 
-typedef struct packet {
-    char header[5];                 /* Data header, as described in intro */
-    char type[3];                   /* Type, two-letter string like "U1" or "U2" */
-    char data[PACKET_DATA_SIZE];    /* The bytes of data as raw bytes */
-    uint16_t packets_incoming;      /* The number of packets planned to follow */
-    uint16_t packet_missed_id;      /* 0 if no errors, packets_incoming of missed packet if there is one */
-    char footer[4];                 /* The footer of the data, e.g. "END/0/n" */
-} packet;
+typedef struct packet_t
+{
+    char header[5];              /* Data header, as described in intro */
+    char type[3];                /* Type, two-letter string like "U1" or "U2" */
+    char data[PACKET_DATA_SIZE]; /* The bytes of data as raw bytes */
+    uint16_t packets_incoming;   /* The number of packets planned to follow */
+    uint16_t packet_missed_id;   /* 0 if no errors, packets_incoming of missed packet if there is one */
+    char footer[4];              /* The footer of the data, e.g. "END/0/n" */
+} packet_t;
 
-uint8_t packet_buffer[PACKET_TOTAL_SIZE + 1] = "";  /* Holds the contents of partial packets */
-int packet_buffer_pos = 0;  /* Tracks where to paste next into packet buffer */
+uint8_t *g_packet_buffer;    /* Holds the contents of partial packets */
+int g_packet_buffer_pos = 0; /* Tracks where to paste next into packet buffer */
 
 QueueHandle_t uart_handle;
 QueueHandle_t uart_write_handle;
@@ -99,25 +102,29 @@ void init_uart_0(int baud_rate)
     ESP_ERROR_CHECK(err);
 }
 
-
 /**
- * @brief Given a packet, send the packet to the queue, allocating memory as necessary.
+ * @brief Given a packet, send the packet to the packet handler queue to be read, allocating memory as necessary.
  * 
  * @param p The packet to verify and send through the queue.
  */
-void send_packet_to_queue(packet *p)
+void send_packet_to_queue(packet_t *packet_pointer)
 {
-    if( strncmp(p->footer, "END", 3) == 0 ) /* Verify packet ends with the footer */
-        xQueueSend( packet_queue, (void *)p, (portTickType)portMAX_DELAY );
-    else ESP_LOGI(SERIAL_TAG, "Bad Packet noticed in send_packet_to_queue!");
+    if (strncmp(packet_pointer->footer, PACKET_FOOTER, 3) == 0) /* Verify packet ends with the footer */
+
+        /* Confusing, but we need to give the address of the packet pointer to copy the packet pointer itself */
+        xQueueSend(packet_queue, (void *)&packet_pointer, (portTickType)portMAX_DELAY);
+
+    else
+        ESP_LOGI(SERIAL_TAG, "Bad Packet noticed in send_packet_to_queue!");
 }
 
-
 /**
- * @brief Given data of size PACKET_DATA_SIZE, send data as a single packet through serial port.
+ * @brief Given data of size PACKET_DATA_SIZE, send data as a single packet through serial port using write queue.
  * 
- * @param data Pointer to the data to be sent. Will be freed through UART Write Queue
+ * @param data Pointer to the data to be sent. Will be freed through UART Write Queue. Should be pre-allocated.
  * @param size The size of the data to be sent. Has to be 256 to work, meant to programatically confirm data size.
+ * @param num_to_follow The value to express how many packets are expected to follow in the packet set.
+ * @param error_id The id (e.g. num_to_follow value) of any packets that were dropped from the desktop application
  */
 void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int error_id)
 {
@@ -125,7 +132,7 @@ void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int err
     {
         uart_write_evt_t msg;
         msg.cmd = SEND_PACKET;
-        msg.size = size; 
+        msg.size = size;
         msg.data = data;
         msg.num_to_follow = num_to_follow;
         msg.error_id = error_id;
@@ -133,7 +140,6 @@ void send_data_as_one_packet(uint8_t *data, int size, int num_to_follow, int err
         xQueueSend(uart_write_handle, (void *)&msg, (portTickType)portMAX_DELAY);
     }
 }
-
 
 /**
  * @brief Finds and returns the position (as a pointer) of the string "DATA" 
@@ -151,16 +157,17 @@ char *find_data_string(char *data, int size)
 
     for (int i = 0; i < size; i++)
     {
-        if (data[i] == PACKET_HEADER[d_pos]) 
-            d_pos = d_pos + 1; 
-            else d_pos = 0;
+        if (data[i] == PACKET_HEADER[d_pos])
+            d_pos = d_pos + 1;
+        else
+            d_pos = 0;
 
-        if (d_pos == 4) return &data[i - 3];    /* The past 4 letters have matched */
+        if (d_pos == 4)
+            return &data[i - 3]; /* The past 4 letters have matched */
     }
 
     return NULL;
 }
-
 
 /**
  * @brief Parses serial input and checks for a packet, and handles a packet if a whole one is found.
@@ -170,18 +177,24 @@ char *find_data_string(char *data, int size)
  */
 int handle_start_of_packet(char *data, int size)
 {
+    ESP_LOGI(SERIAL_TAG, "Handling start... size = %d", size);
+    ESP_LOGI(SERIAL_TAG, "%d %d %d %d", data[0], data[1], data[2], data[3]);
+
     if (strncmp(data, PACKET_HEADER, size) == 0) /* Header of packet found at beginning! Should be the case most of the time. */
     {
+        g_packet_buffer = malloc(sizeof(packet_t)); /* Cleaned in packet handler step */
+
         if (size < PACKET_TOTAL_SIZE) /* Only received part of a packet */
         {
-            memcpy(packet_buffer, data, size);
-            packet_buffer_pos = size;
-            return 1;   /* return a 1 since we only have a partial packet in packet buffer */
+            memcpy(g_packet_buffer, data, size);
+            g_packet_buffer_pos = size;
+            return 1; /* return a 1 since we only have a partial packet in packet buffer */
         }
         else /* size is greater than that of one packet, received more than one. Will not happen in any case, but here just in case */
         {
-            memcpy(packet_buffer, data, PACKET_TOTAL_SIZE);
-            send_packet_to_queue((packet *)packet_buffer);
+            memcpy(g_packet_buffer, data, PACKET_TOTAL_SIZE);
+            // send_packet_to_queue((packet_t *)g_packet_buffer);
+            free(g_packet_buffer);
             return handle_start_of_packet(data + PACKET_TOTAL_SIZE, size - PACKET_TOTAL_SIZE); /* Send extra data back through handler */
         }
     }
@@ -196,7 +209,6 @@ int handle_start_of_packet(char *data, int size)
     }
 }
 
-
 /**
  * @brief This function accepts and parses serial inputs in the case that we are in the middle of receiving a packet
  * @param data A pointer to the serial data
@@ -205,21 +217,23 @@ int handle_start_of_packet(char *data, int size)
  */
 int continue_handling_packet(char *data, int size)
 {
-    int room_to_copy = PACKET_TOTAL_SIZE - packet_buffer_pos;
+    ESP_LOGI(SERIAL_TAG, "Continuing... size = %d", size);
+    ESP_LOGI(SERIAL_TAG, "%d %d %d %d", data[0], data[1], data[2], data[3]);
+
+    int room_to_copy = PACKET_TOTAL_SIZE - g_packet_buffer_pos;
     if (size >= room_to_copy)
     {
-        memcpy(packet_buffer + packet_buffer_pos, data, room_to_copy);
-        send_packet_to_queue((packet *)packet_buffer);
+        memcpy(g_packet_buffer + g_packet_buffer_pos, data, room_to_copy);
+        send_packet_to_queue((packet_t *)g_packet_buffer);
         return handle_start_of_packet(data + room_to_copy, size - room_to_copy);
     }
-    else    /* data won't fill to end of packet buffer */
+    else /* data won't fill to end of packet buffer */
     {
-        memcpy(packet_buffer + packet_buffer_pos, data, size);
-        packet_buffer_pos += size;
+        memcpy(g_packet_buffer + g_packet_buffer_pos, data, size);
+        g_packet_buffer_pos += size;
         return 1;
     }
 }
-
 
 /**
  * @brief This function takes a set amount of serial data and handles a packet. If we
@@ -236,18 +250,45 @@ int continue_handling_packet(char *data, int size)
  */
 int handle_serial_input(char *data, int size, int receiving_packet)
 {
-    if (size == 0)
+    if (size == 0) /* Used as base case for when this function is used recursively */
         return 0;
 
-    /* We are not in the middle of receiving a packet, so search this packet for header */
-    if (!receiving_packet) 
-        return handle_start_of_packet(data, size);     
+    // ESP_LOGI(SERIAL_TAG, "HANDLING PACKET SIZE %d", size);
+    // ESP_LOGI(SERIAL_TAG, "[data]: %s", data);
 
-    /* we are previously receiving packet, so check how much we have in buffer and copy into buffer */
-    else 
-        return continue_handling_packet(data, size);  
+
+    if (!receiving_packet)
+    {
+        return handle_start_of_packet(data, size);
+    }
+
+    else
+    {
+        return continue_handling_packet(data, size);
+    }
 }
 
+void handle_u2_packets(packet_t *p1, packet_t *p2)
+{
+    if (p1 == NULL || p2 == NULL)
+        return;
+
+    uint8_t *output_data = malloc(PACKET_DATA_SIZE);
+    fad_algo((uint16_t *)p1->data, output_data, 0, 0, 1);
+    fad_algo((uint16_t *)p2->data, output_data + PACKET_DATA_SIZE / 2, 0, 0, 1);
+
+    int num_to_follow = p2->packets_incoming / 2;
+    uint16_t error_id = 0;
+    send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, error_id);
+}
+
+void prepare_algorithm(char *algo_string)
+{
+    if (strncmp(algo_string, "ALGO_WHITE_V1_0", 50) == 0)
+    {
+        algo_white_init(128);
+    }
+}
 
 /**
  * @brief A FreeRTOS task that checks the packet queue for packets, parses the packets, 
@@ -255,46 +296,44 @@ int handle_serial_input(char *data, int size, int receiving_packet)
  */
 void packet_handler_task(void *params)
 {
-    packet p;
-    uint8_t *output_data = NULL;
-    int num_sent = 0;
+    /* Need an array of packet pointers of at least 2 to hold extra packets */
+    packet_t *p = NULL;
+
+    // Used to hold first of 2 packets to be sent to u2 packet handler
+    packet_t *p1 = NULL;
 
     for (;;)
     {
         if (xQueueReceive(packet_queue, (void *)&p, (portTickType)portMAX_DELAY) == pdPASS)
         {
-           /* Incoming packets are formatted as sequential 16-bit values. Need two input packets to create 1 output packet */
-            // ESP_LOGI(SERIAL_TAG, "HANDLING PACKET, remaining: %d", p.packets_incoming);
+            ESP_LOGI(SERIAL_TAG, "REACHED QUEUE");
 
-            int write_pos = PACKET_DATA_SIZE / 2;
-
-            if (p.packets_incoming % 2 == 1)    /* This means this packet is the first of a pair (since "odd" packets have even packets left) */
+            if (p->type[0] == 'U' && p->type[1] == '2') // Compare to U2, which is data formatted as 2-byte unsigned values
             {
-                output_data = (uint8_t *)malloc(PACKET_DATA_SIZE); /* Reallocate output data to a new address for fresh memory (prevents corrupting... */
-                write_pos = 0;                                     /* ...previous packets before they've been written) */
+                ESP_LOGI(SERIAL_TAG, "Data packet here");
+                /* Packet pairs come in odd/even ticks, meaning first packet will have odd incoming value, second will have even */
+                if (p->packets_incoming % 2 == 1)
+                {
+                    p1 = p;
+                }
+                else
+                {
+                    handle_u2_packets(p1, p);
+                    free(p1);
+                    free(p);
+                }
             }
-
-            // ESP_LOGI(SERIAL_TAG, "Beginning algo...");
-            fad_algo((uint16_t *)p.data, output_data + write_pos, 0, 0, 1);
-
-            if (write_pos == 128)   /* Packet is ready! Send out with appropriate data */
+            else if (p->type[0] == 'A' && p->type[1] == 'S') // Compare to AS, which is an algorithm selection statement
             {
-                /* If the first packet comes in with 3 remaining, that means four packets are input, so 2 must be output (or 1 remaining) */
-                /* If the first packet comes in with 7 remaining, that means 8 packets are input, so 4 must be output (or 3 remaining) */
-                int num_to_follow = p.packets_incoming / 2; 
-                uint16_t error_id = 0;
-                send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, error_id);
-                // ESP_LOGI(SERIAL_TAG, "PACKET SENT OUT, remaining to send: %d, past sent: %d", num_to_follow, num_sent);
-                num_sent++;
+                ESP_LOGI(SERIAL_TAG, "Not a data packet");
+                prepare_algorithm(p->data);
+                fad_algo = algo_white;
             }
-            
-            
         }
     }
 
     vTaskDelete(NULL);
 }
-
 
 /**
  * @brief A FreeRTOS task that checks the serial queue (given by Espressif's UART API)
@@ -305,8 +344,8 @@ void packet_handler_task(void *params)
 void serial_read_task(void *params)
 {
 
-    uart_event_t event; /* Initialize a copy of an event object to receive Queue data */
-    int receiving_packet = 0;   /* Keeps track of whether there are parts of packets waiting to be parsed in the input handler */
+    uart_event_t event;       /* Initialize a copy of an event object to receive Queue data */
+    int receiving_packet = 0; /* Keeps track of whether there are parts of packets waiting to be parsed in the input handler */
 
     for (;;)
     {
@@ -315,9 +354,9 @@ void serial_read_task(void *params)
             switch (event.type)
             {
 
-            case UART_DATA:;        /* Means there is regular data on the UART line */
+            case UART_DATA:; /* Means there is regular data on the UART line */
                 char *data = (char *)malloc(sizeof(char) * event.size + 1);
-                data[event.size] = 0;   /* Append 0 to end of data for certainty */
+                data[event.size] = 0; /* Append 0 to end of data for certainty */
                 uart_read_bytes(UART_INSTANCE, data, event.size, 2);
                 // ESP_LOGI(SERIAL_TAG, "DATA HERE! Size: %d", event.size);
                 receiving_packet = handle_serial_input(data, event.size, receiving_packet);
@@ -325,7 +364,7 @@ void serial_read_task(void *params)
                 data = NULL;
                 break;
 
-            case UART_BUFFER_FULL:  /* The buffer has overflowed. Packets corrupted */
+            case UART_BUFFER_FULL: /* The buffer has overflowed. Packets corrupted */
                 ESP_LOGI(SERIAL_TAG, "[BUFFER_FULL]:");
                 break;
 
@@ -337,7 +376,6 @@ void serial_read_task(void *params)
 
     vTaskDelete(NULL);
 }
-
 
 /**
  * @brief A FreeRTOS task that accepts a uart_write_evt_t struct from the queue,
@@ -357,8 +395,9 @@ void serial_write_task(void *params)
             {
             /* uart_write_bytes copies data to TX ring bufffer,
             possibly blocking until there is space */
-            case SEND_PACKET: ;
-                if (event.size != 256) break;
+            case SEND_PACKET:;
+                if (event.size != 256)
+                    break;
                 char type_data[3] = "U1";
                 uart_write_bytes(UART_INSTANCE, PACKET_HEADER, 5);
                 uart_write_bytes(UART_INSTANCE, type_data, 3);
@@ -388,7 +427,6 @@ void serial_write_task(void *params)
     }
 }
 
-
 void app_main(void)
 {
     init_uart_0(115200);
@@ -399,16 +437,15 @@ void app_main(void)
 
     /* Create queues for Uart Write task and Packet Handler task */
     uart_write_handle = xQueueCreate(10, sizeof(uart_write_evt_t));
-    packet_queue = xQueueCreate(5, sizeof(packet));
+    packet_queue = xQueueCreate(5, sizeof(packet_t));
 
     TaskHandle_t uart_read_task, uart_write_task, packet_task; // Throwaway vars, but needed
 
     /* Create and begin tasks located in functions given by first argument */
-    xTaskCreate(serial_read_task, "Uart0 Queue Task", 2048, 
+    xTaskCreate(serial_read_task, "Uart0 Queue Task", 2048,
                 NULL, configMAX_PRIORITIES - 3, &uart_read_task);
-    xTaskCreate(serial_write_task, "Uart0 Write Task", 2048, 
+    xTaskCreate(serial_write_task, "Uart0 Write Task", 2048,
                 NULL, configMAX_PRIORITIES - 3, &uart_write_task);
-    xTaskCreate(packet_handler_task, "Packet Handler", 2048, 
+    xTaskCreate(packet_handler_task, "Packet Handler", 2048,
                 NULL, configMAX_PRIORITIES - 4, &packet_task);
-
 }
