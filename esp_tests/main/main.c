@@ -110,9 +110,12 @@ void init_uart_0(int baud_rate)
 void send_packet_to_queue(packet_t *packet_pointer)
 {
     if (strncmp(packet_pointer->footer, PACKET_FOOTER, 3) == 0) /* Verify packet ends with the footer */
+    {
+        // ESP_LOGI(SERIAL_TAG, "PACKET VERIFIED");
 
         /* Confusing, but we need to give the address of the packet pointer to copy the packet pointer itself */
         xQueueSend(packet_queue, (void *)&packet_pointer, (portTickType)portMAX_DELAY);
+    }
 
     else
         ESP_LOGI(SERIAL_TAG, "Bad Packet noticed in send_packet_to_queue!");
@@ -177,9 +180,6 @@ char *find_data_string(char *data, int size)
  */
 int handle_start_of_packet(char *data, int size)
 {
-    ESP_LOGI(SERIAL_TAG, "Handling start... size = %d", size);
-    ESP_LOGI(SERIAL_TAG, "%d %d %d %d", data[0], data[1], data[2], data[3]);
-
     if (strncmp(data, PACKET_HEADER, size) == 0) /* Header of packet found at beginning! Should be the case most of the time. */
     {
         g_packet_buffer = malloc(sizeof(packet_t)); /* Cleaned in packet handler step */
@@ -193,8 +193,7 @@ int handle_start_of_packet(char *data, int size)
         else /* size is greater than that of one packet, received more than one. Will not happen in any case, but here just in case */
         {
             memcpy(g_packet_buffer, data, PACKET_TOTAL_SIZE);
-            // send_packet_to_queue((packet_t *)g_packet_buffer);
-            free(g_packet_buffer);
+            send_packet_to_queue((packet_t *)g_packet_buffer);
             return handle_start_of_packet(data + PACKET_TOTAL_SIZE, size - PACKET_TOTAL_SIZE); /* Send extra data back through handler */
         }
     }
@@ -217,9 +216,6 @@ int handle_start_of_packet(char *data, int size)
  */
 int continue_handling_packet(char *data, int size)
 {
-    ESP_LOGI(SERIAL_TAG, "Continuing... size = %d", size);
-    ESP_LOGI(SERIAL_TAG, "%d %d %d %d", data[0], data[1], data[2], data[3]);
-
     int room_to_copy = PACKET_TOTAL_SIZE - g_packet_buffer_pos;
     if (size >= room_to_copy)
     {
@@ -253,10 +249,6 @@ int handle_serial_input(char *data, int size, int receiving_packet)
     if (size == 0) /* Used as base case for when this function is used recursively */
         return 0;
 
-    // ESP_LOGI(SERIAL_TAG, "HANDLING PACKET SIZE %d", size);
-    // ESP_LOGI(SERIAL_TAG, "[data]: %s", data);
-
-
     if (!receiving_packet)
     {
         return handle_start_of_packet(data, size);
@@ -287,6 +279,15 @@ void prepare_algorithm(char *algo_string)
     if (strncmp(algo_string, "ALGO_WHITE_V1_0", 50) == 0)
     {
         algo_white_init(128);
+        fad_algo = algo_white;
+    }
+    else if (strncmp(algo_string, "ALGO_TEST", 50) == 0)
+    {
+        algo_test_init(128);
+        fad_algo = algo_test;
+    }
+    else {
+        ESP_LOGI(SERIAL_TAG, "Unhandled test selection... %s", algo_string);
     }
 }
 
@@ -306,8 +307,6 @@ void packet_handler_task(void *params)
     {
         if (xQueueReceive(packet_queue, (void *)&p, (portTickType)portMAX_DELAY) == pdPASS)
         {
-            ESP_LOGI(SERIAL_TAG, "REACHED QUEUE");
-
             if (p->type[0] == 'U' && p->type[1] == '2') // Compare to U2, which is data formatted as 2-byte unsigned values
             {
                 ESP_LOGI(SERIAL_TAG, "Data packet here");
@@ -325,10 +324,14 @@ void packet_handler_task(void *params)
             }
             else if (p->type[0] == 'A' && p->type[1] == 'S') // Compare to AS, which is an algorithm selection statement
             {
-                ESP_LOGI(SERIAL_TAG, "Not a data packet");
+                ESP_LOGI(SERIAL_TAG, "Algorithm selection...");
                 prepare_algorithm(p->data);
-                fad_algo = algo_white;
             }
+            else
+            {
+                ESP_LOGI(SERIAL_TAG, "Unhandled type, %s", p->type);
+            }
+            
         }
     }
 
@@ -437,7 +440,7 @@ void app_main(void)
 
     /* Create queues for Uart Write task and Packet Handler task */
     uart_write_handle = xQueueCreate(10, sizeof(uart_write_evt_t));
-    packet_queue = xQueueCreate(5, sizeof(packet_t));
+    packet_queue = xQueueCreate(5, sizeof(packet_t*));
 
     TaskHandle_t uart_read_task, uart_write_task, packet_task; // Throwaway vars, but needed
 

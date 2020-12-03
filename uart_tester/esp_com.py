@@ -112,6 +112,8 @@ ALGO_TEST = b'ALGO_TEST'
 # Data Types (bytes-like)
 ONE_BYTE_UNSIGNED = b'U1\0'
 TWO_BYTE_UNSIGNED = b'U2\0'
+UNSIGNED_BYTE_TYPES = [0, ONE_BYTE_UNSIGNED, TWO_BYTE_UNSIGNED]
+
 ALGORITHM_SELECT = b'AS\0'
 
 
@@ -288,6 +290,7 @@ class SerialStopException(Exception):
 
 class FadSerialPacketHandler():
 
+    PACKET_DUMP_SIZE = 10   # Sets the number of packets sent at a time
     class FadPacket():
         '''This class defines the components of a serial data packet
         which holds simulated audio data to be sent between the ESP32
@@ -314,11 +317,11 @@ class FadSerialPacketHandler():
         def __str__(self):
             return f'Data: {self.data.hex()}'
 
-    PACKET_DUMP_SIZE = 10   # Sets the number of packets sent at a time
     def __init__(self, send_data, algorithms, byte_size):
         self.receive_buffer = []
 
         self.original_data = send_data
+        self.data_size = UNSIGNED_BYTE_TYPES[byte_size]
         self.in_data = self.partition_data(send_data, byte_size)
         self.in_data_pos = 0 
         self.in_data_len = len(self.in_data)
@@ -330,7 +333,7 @@ class FadSerialPacketHandler():
         self.first_packet = False   # keeps track of whether a first packet has been received
         self.last_packet = 0        # keeps track of number of last packet
         self.message = ''
-        self.finished_algorithm = False
+        self.finished_algorithm = True
         self.ignore_dump = False
         
     def partition_data(self, data_to_send, int_size_in_bytes):
@@ -349,7 +352,6 @@ class FadSerialPacketHandler():
         return data_array
 
     def add_packet(self, packet_data):
-
         try:
             packet = self.FadPacket(packet_data)
             self.receive_buffer.append(packet)
@@ -369,7 +371,6 @@ class FadSerialPacketHandler():
             # for now, just print
             print(repr(err))
         
-
         if not self.first_packet:
             self.first_packet = True
         
@@ -395,7 +396,7 @@ class FadSerialPacketHandler():
         except queue.Empty:
             missed_packet = 0
 
-        packet = self._create_generic_packet(self.in_data[self.in_data_pos], ONE_BYTE_UNSIGNED, packets_left, missed_packet)
+        packet = self._create_generic_packet(self.in_data[self.in_data_pos], self.data_size, packets_left, missed_packet)
         self.in_data_pos += 1
 
         return packet
@@ -404,19 +405,20 @@ class FadSerialPacketHandler():
     
     def initial_packet(self):
         '''Returns an initiation packet based on next algorithm choice'''
-        self.algorithms_pos -= 1
 
         if (self.finished_algorithm == False):
-            return None
+            return b'' 
 
-        if (self.algorithms_pos < 0):
+        if (self.algorithms_pos == 0):
             self.message = "Out of algorithms."
             self.algorithms_pos = len(self.algorithms)
             return None
 
+        self.algorithms_pos -= 1
         algo = self.algorithms[self.algorithms_pos] 
         data = algo + b'\0' * (PACKET_DATA_SIZE - len(algo))
         self.finished_algorithm = False
+        self.in_data_pos = 0
         return self._create_generic_packet(data, ALGORITHM_SELECT, len(self.in_data), 0)
 
     def _create_generic_packet(self, data, data_type, packets_left, packets_missed):
@@ -551,8 +553,7 @@ class FadMonitor(object):
     
     def send_data(self):
         print("Beginning packet transmission...")
-        # packet = self.packet_handler.initial_packet() 
-        packet = b''
+        packet = self.packet_handler.initial_packet() 
         while packet != None:
             self.serial.write(packet)
             packet = self.packet_handler.next_packet()
@@ -593,17 +594,16 @@ def main():
     serial_instance.dtr = False
     serial_instance.rts = False
 
-    large_song = dt.get_song(2)[64640:95360]
-    small_song = dt.get_song(2)[80000:88192]
-    one_packet = small_song[0:256]
-    my_packet = dt.discrete_square_wave(20, 256)
-    for i in range(255):
-        my_packet[i] += 30 
+    # large_song = dt.get_song(2)[64640:95360]
+    # small_song = dt.get_song(2)[80000:88192]
+    # one_packet = small_song[0:256]
 
-    my_packet[5] = 0
-    my_data = dt.to_discrete(my_packet) # Square wave with amplitude 512 and width 20
+    my_packet = dt.sine_wave(20, 2560 // 2)
 
-    monitor = FadMonitor(serial_instance, send_data=my_data, send_data_byte_size=1)
+    my_data = dt.to_discrete(1000 * my_packet) 
+    print(my_data)
+
+    monitor = FadMonitor(serial_instance, send_data=my_data, test_algorithms = [ALGO_WHITE_V1_0, ALGO_TEST], send_data_byte_size=2)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
         p=serial_instance))
 

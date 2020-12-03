@@ -177,7 +177,11 @@ def high_pass(signal, num, filter_type = 'square', offset = 0, custom_filer = No
     
 def get_song(time):
 
-    fp = 'C:/ffmpeg/test_song_3.wav'
+    if sys.platform == "linux" or sys.platform == "linux2":
+        fp = 'C:/ffmpeg/test_song_3.wav'
+
+    elif sys.platform == "win32":
+        fp = 'C:/ffmpeg/test_song_3.wav'
 
     song_signal, sampling_rate = open_audio(fp)
 
@@ -199,10 +203,6 @@ def signal_feeder(s, pll_func, buff_size = 1):
                 output.append(temp[j])
         return output
 
-def plot_from_bytes(bytes):
-    signals = [list(bytes)]
-    plot(signals)
-
 def plot(signals, labels, title: str = "Figure"):
     fig, ax = plt.subplots()
     for s in signals:
@@ -212,6 +212,10 @@ def plot(signals, labels, title: str = "Figure"):
         ax.legend(labels)
 
     fig.suptitle(title)
+    
+def plot_from_bytes(bytes):
+    signals = [list(bytes)]
+    plot(signals)
 
 def play(s):
     import sounddevice as sd
