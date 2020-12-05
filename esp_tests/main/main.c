@@ -5,10 +5,10 @@
  * This program allows an ESP32 to accept packets off of a serial line, perform an
  * FAD algorithm on the data, and return packets over the serial line with the output
  * of the algorithm. A packet is of the form:
- * HEADER:  The string "DATA" as chars, then a single 0 ('\0'), then a one byte value indicating packets 
- *          to follow, then a one byte value indicating number of packets sent previously in the chunk
+ * HEADER:  The string "DATA" as chars, then a single 0 ('\0'), then a two char value indicating packet 
+ *          type, then another 0 char ('\0')
  * DATA:    256 Bytes of raw bytes data
- * FOOTER:  The string "ENDSIG" as chars, then a single 0 ('\0'), then a newline character ('\n' or '\x0a)
+ * FOOTER:  A two byte value indicating packets to follow, a two byte value indicating a missed packet, then the string "END\n" as chars
  * 
  * This program utilizes the serial UART library from Espressif. After initialization, this library
  * provides serial data to a queue, handled in this program by the serial_read_task. This data is then
@@ -62,7 +62,7 @@ typedef struct packet_t
     char data[PACKET_DATA_SIZE]; /* The bytes of data as raw bytes */
     uint16_t packets_incoming;   /* The number of packets planned to follow */
     uint16_t packet_missed_id;   /* 0 if no errors, packets_incoming of missed packet if there is one */
-    char footer[4];              /* The footer of the data, e.g. "END/0/n" */
+    char footer[4];              /* The footer of the data, e.g. "END/n" */
 } packet_t;
 
 uint8_t *g_packet_buffer;    /* Holds the contents of partial packets */
@@ -111,14 +111,14 @@ void send_packet_to_queue(packet_t *packet_pointer)
 {
     if (strncmp(packet_pointer->footer, PACKET_FOOTER, 3) == 0) /* Verify packet ends with the footer */
     {
-        // ESP_LOGI(SERIAL_TAG, "PACKET VERIFIED");
-
         /* Confusing, but we need to give the address of the packet pointer to copy the packet pointer itself */
         xQueueSend(packet_queue, (void *)&packet_pointer, (portTickType)portMAX_DELAY);
     }
 
-    else
+    else 
+    {
         ESP_LOGI(SERIAL_TAG, "Bad Packet noticed in send_packet_to_queue!");
+    }
 }
 
 /**
@@ -260,6 +260,13 @@ int handle_serial_input(char *data, int size, int receiving_packet)
     }
 }
 
+/**
+ * @brief Function to handle packets with 'U2' data type. Passes content of
+ * both packets to the set algorithm, and sends the output data to the write queue.
+ * 
+ * @param p1 A pointer to one of two packets to be transformed.
+ * @param p2 A pointer to two of two packets to be transformed.
+ */
 void handle_u2_packets(packet_t *p1, packet_t *p2)
 {
     if (p1 == NULL || p2 == NULL)
@@ -274,6 +281,11 @@ void handle_u2_packets(packet_t *p1, packet_t *p2)
     send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, error_id);
 }
 
+/**
+ * @brief Sets up an algorithm based on the data from a packet of type 'AS'.
+ * 
+ * @param algo_string A string message that indicates an algorithm selection.
+ */
 void prepare_algorithm(char *algo_string)
 {
     if (strncmp(algo_string, "ALGO_WHITE_V1_0", 50) == 0)
@@ -309,7 +321,6 @@ void packet_handler_task(void *params)
         {
             if (p->type[0] == 'U' && p->type[1] == '2') // Compare to U2, which is data formatted as 2-byte unsigned values
             {
-                ESP_LOGI(SERIAL_TAG, "Data packet here");
                 /* Packet pairs come in odd/even ticks, meaning first packet will have odd incoming value, second will have even */
                 if (p->packets_incoming % 2 == 1)
                 {
@@ -322,9 +333,9 @@ void packet_handler_task(void *params)
                     free(p);
                 }
             }
+
             else if (p->type[0] == 'A' && p->type[1] == 'S') // Compare to AS, which is an algorithm selection statement
             {
-                ESP_LOGI(SERIAL_TAG, "Algorithm selection...");
                 prepare_algorithm(p->data);
             }
             else
@@ -372,7 +383,7 @@ void serial_read_task(void *params)
                 break;
 
             default:;
-                // ESP_LOGI(SERIAL_TAG, "[NOT HANDLED]: %d", event.type);
+                ESP_LOGI(SERIAL_TAG, "[NOT HANDLED]: %d", event.type);
             }
         }
     }
@@ -432,7 +443,7 @@ void serial_write_task(void *params)
 
 void app_main(void)
 {
-    init_uart_0(115200);
+    init_uart_0(115200 * 2);
     // algo_white_init(128);
     // fad_algo = algo_white;
     algo_white_init(128);
