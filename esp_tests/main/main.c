@@ -27,8 +27,9 @@
 #include "driver/uart.h"
 
 #include "algo_test.h"
-#include "fad_defs.h"
 #include "algo_white.h"
+#include "fad_defs.h"
+#include "algo_delay.h"
 
 #define BUF_SIZE (1024)
 #define RD_BUF_SIZE (1024)
@@ -67,6 +68,9 @@ typedef struct packet_t
 
 uint8_t *g_packet_buffer;    /* Holds the contents of partial packets */
 int g_packet_buffer_pos = 0; /* Tracks where to paste next into packet buffer */
+
+void algo_no_deinit(){;}
+void (*deinit_func_g)() = algo_no_deinit;
 
 QueueHandle_t uart_handle;
 QueueHandle_t uart_write_handle;
@@ -288,15 +292,26 @@ void handle_u2_packets(packet_t *p1, packet_t *p2)
  */
 void prepare_algorithm(char *algo_string)
 {
+    /* First call deinit, set by one of these setup cases below, or else an empty function. */
+    deinit_func_g();
+
     if (strncmp(algo_string, "ALGO_WHITE_V1_0", 50) == 0)
     {
         algo_white_init(128);
         fad_algo = algo_white;
+        deinit_func_g = algo_no_deinit; // algo_no_deinit is a default empty function 
     }
     else if (strncmp(algo_string, "ALGO_TEST", 50) == 0)
     {
         algo_test_init(128);
         fad_algo = algo_test;
+        deinit_func_g = algo_no_deinit;
+    }
+    else if (strncmp(algo_string, "ALGO_DELAY", 50) == 0)
+    {
+        algo_delay_init(128, 2560);
+        fad_algo = algo_delay;
+        deinit_func_g = algo_delay_deinit;
     }
     else {
         ESP_LOGI(SERIAL_TAG, "Unhandled test selection... %s", algo_string);

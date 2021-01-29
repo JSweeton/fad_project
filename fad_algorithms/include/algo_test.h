@@ -11,11 +11,12 @@
 
 #include <stdint.h>
 
-/* Usable portion of buffer to perform the algorithm, as other portions fill up. Should always be at least half of buffer size. */
 //To calculate bit shift, use ALGO_TEST_SIZE * max ADC input to find range of running_ADC_average; 
 #define BIT_SHIFT 10
 
 uint32_t running_ADC_average;
+
+/* Usable portion of buffer to perform the algorithm, as other portions fill up. Should always be at least half of buffer size. */
 uint16_t algo_test_size;
 
 /**

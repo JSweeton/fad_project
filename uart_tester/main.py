@@ -25,6 +25,7 @@ from tools.packet_handler import FadSerialPacketHandler
 
 from tools.consts import CMD, TAGS, PACKETS as P, CTRL, SerialStopException
 
+ALGORITHMS_G = [P.ALGO_TEST, P.ALGO_WHITE_V1_0, P.ALGO_DELAY]
 
 class ConsoleParser(object):
 
@@ -49,6 +50,7 @@ class ConsoleParser(object):
         else:
             key = self.translate_eol(key)
             ret = (TAGS.TAG_KEY, key)
+            print("Use 'w' key to send data")
         return ret
 
 
@@ -210,7 +212,7 @@ def main():
     # my_data = dt.to_discrete(2000 * my_packet) 
     my_data = dt.to_discrete(2000 * large_song)
 
-    monitor = FadMonitor(serial_instance, send_data=my_data, test_algorithms = [P.ALGO_WHITE_V1_0, P.ALGO_TEST], send_data_byte_size=2)
+    monitor = FadMonitor(serial_instance, send_data=my_data, test_algorithms = ALGORITHMS_G, send_data_byte_size=2)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
         p=serial_instance))
 

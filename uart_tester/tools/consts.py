@@ -47,6 +47,7 @@ class PACKETS():
     # Algorithm Choices
     ALGO_WHITE_V1_0 = b'ALGO_WHITE_V1_0' 
     ALGO_TEST = b'ALGO_TEST'
+    ALGO_DELAY = b'ALGO_DELAY'
 
     # Data Types (bytes-like)
     ONE_BYTE_UNSIGNED = b'U1\0'

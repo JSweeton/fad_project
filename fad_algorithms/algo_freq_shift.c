@@ -1,16 +1,16 @@
 /**
- * algo_template.c
+ * algo_freq_shift.c
  * Author: Corey Bean,
  * Organization: Messiah Collaboratory
- * Date: 10/12/2020
+ * Date: 1/26/2021
  *
  * Description:
- * This file demonstrates the template for the algorithm file.
+ * This algorithm takes the input signal and shifts it in the frequency domain by some target frequency.
  */
 
-#include "algo_template.h"
+#include "algo_freq_shift.h"
 
-void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples) {
+void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples) {
 
     /**
      * in_pos and out_pos point to the algorithm half of the buffer. Only ready and write to data in the half
@@ -20,7 +20,7 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
      */
 
     /* This algorithm simply outputs the input to the ADC */
-    for (int i = 0; i < algo_template_read_size / multisamples; i++) {
+    for (int i = 0; i < algo_freq_shift_read_size / multisamples; i++) {
 
         //the following section averages the multisampled ADC data so that each DAC buffer space will have one corresponding ADC value
         uint16_t avg = 0;
@@ -37,6 +37,7 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
 
 }
 
-void algo_template_init(int read_size) {
-    algo_template_read_size = read_size;
+void algo_freq_shift_init(int algo_size, int shift_size) {
+    algo_freq_shift_read_size = algo_size;
+    shift_size_g = shift_size;
 }

@@ -2,6 +2,8 @@ import queue
 from math import ceil
 from tools import dsp_tools as dt
 from tools.consts import PACKETS as P
+import numpy as np
+import datetime
 
 class FadPacket():
     '''This class defines the components of a serial data packet
@@ -63,6 +65,8 @@ class FadSerialPacketHandler():
         self.next_is_init = True
         self.dump_pos = 0
 
+        self.current_algo = "None"
+
     def partition_data(self, data_to_send, byte_length):
         total_length = len(data_to_send)
         data_array = []
@@ -101,6 +105,7 @@ class FadSerialPacketHandler():
     def next_packet(self):
         '''Returns the next packet to be sent, based on last packet sent. Returns None to force a pause or finish'''
         packets_left = len(self.in_data) - self.in_data_pos - 1
+        
 
         if self.in_data_pos == -1:
             self.in_data_pos = 0
@@ -147,6 +152,8 @@ class FadSerialPacketHandler():
         algo = self.algorithms.pop() 
         self.message = f'Starting next algorithm: {algo}'
 
+        self.current_algo = algo
+
         data = algo + b'\0' * (P.PACKET_DATA_SIZE - len(algo))
         return self._create_generic_packet(data, P.ALGORITHM_SELECT, len(self.in_data), 0)
 
@@ -164,15 +171,27 @@ class FadSerialPacketHandler():
         self.first_packet = False
     
     def save_data(self):
-        print("TODO: Implement Data Save")
+        algo = self.current_algo.decode('ascii')
+        f = open(f'{str(datetime.datetime.now())[0:9]}{algo}.txt', 'w')
+
+        all_data = self.stitch_data()
+        np.savetxt(f, all_data)
+        np.savetxt(f, self.original_data)
+
+        f.close()
         
-    def display_received_packets(self):
-        # Stitch together data within packets
+        
+    def stitch_data(self):
         all_data = []   # Holds stitched data from each received packet
         for packet in self.receive_buffer:
             packet_data = list(packet.data)
             for data in packet_data:
                 all_data.append(data * 16)
+        return all_data
+
+    def display_received_packets(self):
+        # Stitch together data within packets
+        all_data = self.stitch_data()
 
         dt.play(dt.center(all_data))
         dt.plot([all_data, self.original_data], labels=["Packet Data", "Input Data"])
