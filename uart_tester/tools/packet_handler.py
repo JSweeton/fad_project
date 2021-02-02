@@ -86,6 +86,7 @@ class FadSerialPacketHandler():
         ''' Add a received packet to the packet buffer for eventual display/handling'''
         try:
             packet = FadPacket(packet_data)
+            # print("incoming:", packet.packets_incoming)
 
             if (len(self.receive_buffer) > 0):
                 for i in range(self.receive_buffer[-1].packets_incoming - 1, packet.packets_incoming):
@@ -96,28 +97,28 @@ class FadSerialPacketHandler():
 
             if packet.packets_incoming == 0:
                 self.display_received_packets()
-                self._clear_data()
 
         except TypeError as err:
             print(repr(err))
         
     
     def next_packet(self):
-        '''Returns the next packet to be sent, based on last packet sent. Returns None to force a pause or finish'''
+        '''Returns the next packet to be sent as a byte array, based on last packet sent. Returns None to force a pause or finish.'''
         packets_left = len(self.in_data) - self.in_data_pos - 1
         
 
         if self.in_data_pos == -1:
             self.in_data_pos = 0
+            self._clear_data()
             return self._initial_packet()
 
         elif (packets_left < 0):
-            self.in_data_pos = -1
+            self.in_data_pos = -1 # Prepare the next_packet function to send an initial packet next.
             self.dump_pos = 0
             self.message = f'Finished sending this set of packets for this algorithm.'
             return None
 
-        elif self.dump_pos == self.PACKET_DUMP_SIZE:
+        elif self.dump_pos == self.PACKET_DUMP_SIZE: # For packet dumps (sending data in sets of packets instead of one big string of packets)
             self.dump_pos = 0
 
             remaining_dumps = ceil((len(self.in_data) - self.in_data_pos) / self.PACKET_DUMP_SIZE)
@@ -172,13 +173,18 @@ class FadSerialPacketHandler():
     
     def save_data(self):
         algo = self.current_algo.decode('ascii')
-        f = open(f'{str(datetime.datetime.now())[0:9]}{algo}.txt', 'w')
 
         all_data = self.stitch_data()
-        np.savetxt(f, all_data)
-        np.savetxt(f, self.original_data)
+        # np.savetxt(f, all_data)
+        # np.savetxt(f, self.original_data)
 
-        f.close()
+        print(len(all_data))
+        print(len(self.original_data))
+
+
+        # np.savetxt(f'{str(datetime.datetime.now)[0:10]}{algo}.csv', a, delimiter=",")
+
+        # f.close()
         
         
     def stitch_data(self):

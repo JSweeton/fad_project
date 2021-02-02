@@ -52,8 +52,8 @@ typedef struct uart_write_evt_t
     enum write_cmd cmd; /* The commands for the uart write handler. */
     uint8_t *data;      /* The data to be written to the handler */
     int size;           /* The size, in bytes, of the data to be copied */
-    char num_to_follow; /* For a packet, number of packets that are coming after */
-    char error_id;      /* For a packet, number of packets that came before */
+    uint16_t num_to_follow; /* For a packet, number of packets that are coming after */
+    uint16_t error_id;      /* For a packet, number of packets that came before */
 } uart_write_evt_t;
 
 typedef struct packet_t
@@ -281,6 +281,7 @@ void handle_u2_packets(packet_t *p1, packet_t *p2)
     fad_algo((uint16_t *)p2->data, output_data + PACKET_DATA_SIZE / 2, 0, 0, 1);
 
     int num_to_follow = p2->packets_incoming / 2;
+    // ESP_LOGI(SERIAL_TAG, "num to follow: %d", num_to_follow);
     uint16_t error_id = 0;
     send_data_as_one_packet(output_data, PACKET_DATA_SIZE, num_to_follow, error_id);
 }
@@ -427,7 +428,7 @@ void serial_write_task(void *params)
             case SEND_PACKET:;
                 if (event.size != 256)
                     break;
-                char type_data[3] = "U1";
+                char type_data[3] = "U1"; // of size 3 to automatically add /0 byte to end
                 uart_write_bytes(UART_INSTANCE, PACKET_HEADER, 5);
                 uart_write_bytes(UART_INSTANCE, type_data, 3);
                 uart_write_bytes(UART_INSTANCE, (void *)event.data, event.size);

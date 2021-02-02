@@ -23,11 +23,15 @@ def normalize_avg(array):
     return array
 
 def center(array):
-    array = array - np.average(array)
-    array = array / (np.max(array) - np.min(array))
+    avg = np.average(array)
+    array = array - avg
+    scale = np.max(array) - np.min(array)
+    if (scale != 0):
+        array = array / scale 
     return array
 
 def flatten(array):
+    '''Places minimum value at 0 and scales up towards a maximum of 1'''
     array = array / (np.max(array) - np.min(array))
     array = array - np.min(array)
     return array
@@ -184,6 +188,13 @@ def get_song(time):
     song_signal, sampling_rate = open_audio(fp)
 
     trunc_signal = song_signal[1950000:1950000 + int(sampling_rate * time)]
+
+    return flatten(trunc_signal)
+
+def get_talking(time):
+    fp = __file__ + '/../test_talking.wav'
+    song_signal, sampling_rate = open_audio(fp)
+    trunc_signal = song_signal[:int(sampling_rate * time)]
 
     return flatten(trunc_signal)
 

@@ -204,13 +204,15 @@ def main():
 
     offset = 30000
     large_song = dt.get_song(2)[0 + offset:51200 + offset]
+    talking = dt.get_talking(3)
+    print(len(talking))
     # small_song = dt.get_song(2)[80000:88192]
     # one_packet = small_song[0:256]
 
     # my_packet = dt.sine_wave(20, 2560)
 
     # my_data = dt.to_discrete(2000 * my_packet) 
-    my_data = dt.to_discrete(2000 * large_song)
+    my_data = dt.to_discrete(2000 * talking)
 
     monitor = FadMonitor(serial_instance, send_data=my_data, test_algorithms = ALGORITHMS_G, send_data_byte_size=2)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
