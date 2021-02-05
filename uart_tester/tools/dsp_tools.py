@@ -22,6 +22,15 @@ def normalize_avg(array):
     array = array / np.sum(array)
     return array
 
+def scale_to_one(array):
+    '''Assuming array is centered at 0 (e.g. zero volume at val 0), return so that max or min are at most 0.5'''
+    scaler = np.max(array)
+    if abs(np.min(array)) > np.max(array):
+        scaler = abs(np.min(array))
+    if scaler != 0:
+        return (array / scaler) / 2
+    return array
+
 def center(array):
     avg = np.average(array)
     array = array - avg
@@ -192,11 +201,12 @@ def get_song(time):
     return flatten(trunc_signal)
 
 def get_talking(time):
+    '''Returns a given number of seconds of talking audio. Audio is 0-centered and has max amplitude of 0.5'''
     fp = __file__ + '/../test_talking.wav'
     song_signal, sampling_rate = open_audio(fp)
     trunc_signal = song_signal[:int(sampling_rate * time)]
 
-    return flatten(trunc_signal)
+    return(scale_to_one(trunc_signal))
 
 def plot(signals, labels, title: str = "Figure"):
     fig, ax = plt.subplots()

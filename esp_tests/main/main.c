@@ -459,7 +459,7 @@ void serial_write_task(void *params)
 
 void app_main(void)
 {
-    init_uart_0(115200 * 2);
+    init_uart_0(115200 * 4);
     // algo_white_init(128);
     // fad_algo = algo_white;
     algo_white_init(128);

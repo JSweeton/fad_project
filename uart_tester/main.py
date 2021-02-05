@@ -25,6 +25,9 @@ from tools.packet_handler import FadSerialPacketHandler
 
 from tools.consts import CMD, TAGS, PACKETS as P, CTRL, SerialStopException
 
+talking = dt.get_talking(3)
+DATA_G = dt.to_discrete(4096 * talking + 2048)
+
 ALGORITHMS_G = [P.ALGO_TEST, P.ALGO_WHITE_V1_0, P.ALGO_DELAY]
 
 class ConsoleParser(object):
@@ -196,7 +199,7 @@ def main():
 
     port = _get_default_serial_port()
     baud = 115200
-    baud = baud * 2
+    baud = baud * 4
     serial_instance = serial.serial_for_url(port, baud,
                                             do_not_open=True)
     serial_instance.dtr = False
@@ -204,17 +207,8 @@ def main():
 
     offset = 30000
     large_song = dt.get_song(2)[0 + offset:51200 + offset]
-    talking = dt.get_talking(3)
-    print(len(talking))
-    # small_song = dt.get_song(2)[80000:88192]
-    # one_packet = small_song[0:256]
 
-    # my_packet = dt.sine_wave(20, 2560)
-
-    # my_data = dt.to_discrete(2000 * my_packet) 
-    my_data = dt.to_discrete(2000 * talking)
-
-    monitor = FadMonitor(serial_instance, send_data=my_data, test_algorithms = ALGORITHMS_G, send_data_byte_size=2)
+    monitor = FadMonitor(serial_instance, send_data=DATA_G, test_algorithms = ALGORITHMS_G, send_data_byte_size=2)
     sys.stderr.write('--- fad_monitor on {p.name} {p.baudrate} ---'.format(
         p=serial_instance))
 
