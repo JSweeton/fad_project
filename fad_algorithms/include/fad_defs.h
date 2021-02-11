@@ -23,8 +23,9 @@
 #define ADC_CHANNEL ADC_CHANNEL_6
 
 /* Timer Definitions */
-#define TIMER_FREQ 80000
-#define ALARM_FREQ 16000 //Determines the frequency of ADC sampling and DAC output
+#define TIMER_FREQ 80000    //Frequency of the Timer
+#define ALARM_FREQ 16000    //Determines the frequency of ADC sampling and DAC output
+
 
 
 /*
@@ -35,7 +36,7 @@
  * @brief     algorithm function
  * 
  * @param in_buff Pointer to beginning of ADC buffer (also a global)
- * @param out_buff Pointer to beginning of DAC buffer (also a global)
+ * @param out_buff [OUT] Pointer to beginning of DAC buffer (also a global)
  * @param in_pos Integer index of algorithm beginning location in ADC buffer
  * @param out_pos Integer index of algorithm beginning location in ADC buffer
  * @param multisamples The number of input samples per output
