@@ -26,9 +26,13 @@ from tools.packet_handler import FadSerialPacketHandler
 from tools.consts import CMD, TAGS, PACKETS as P, CTRL, SerialStopException
 
 talking = dt.get_talking(3)
+
+# Will be sent over to the ESP32. Should be at most 12 bits large (between 0 and 4096, integer) and
+# should be centered around 2048 (i.e. no sound has value of 2048).
 DATA_G = dt.to_discrete(4096 * talking + 2048)
 
-ALGORITHMS_G = [P.ALGO_TEST, P.ALGO_WHITE_V1_0, P.ALGO_DELAY]
+# find list of algorithms and set algorithm names in ./tools/consts.py
+ALGORITHMS_G = [P.ALGO_TEST, P.ALGO_DELAY, P.ALGO_WHITE_V1_0]
 
 class ConsoleParser(object):
 

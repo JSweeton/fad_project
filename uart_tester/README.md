@@ -25,7 +25,12 @@ you must create the algorithm in C using the template found in the algorithms fo
 to the esp_tests file by adding the 
 
 ## Program Start
-Once you have selected your data and your algorithms, you can s
+Once you have selected your data and your algorithms and have flashed and began program to the ESP32, you can start
+the python program here. The program will connect to the ESP32 and should start displaying info from the ESP32.
+Then, once the bootup process has finished, you can press 'w' to write your selected data to the ESP32. It will take
+several presses to complete the process as the program will send the packets in chunks. Once an algorithm has
+finished, you can press 's' to save the data to a file, and analyze the data. The program should also display and
+play the returned audio to listen to immediately. 
 
 # Setup
 To setup your environment, there are some required python packages. Before you install these, make sure
