@@ -242,6 +242,8 @@ static void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param)
         }
     }
 
+    /* Bluetooth headphones COD: 0b [0010 0100 000] [0 0100] [0001 10] [00]
+
     /* search for device with MAJOR service class as "rendering" in COD */
     if (!esp_bt_gap_is_valid_cod(cod) ||
         !(esp_bt_gap_get_cod_srvc(cod) & ESP_BT_COD_SRVC_RENDERING))
@@ -548,14 +550,17 @@ static void bt_app_av_media_proc(uint16_t event, void *param)
     {
     case APP_AV_MEDIA_STATE_IDLE:
     {
+        /* Send Sink device a query to check if it is ready for media transmission */
         if (event == BT_APP_HEART_BEAT_EVT)
         {
             ESP_LOGI(BT_AV_TAG, "a2dp media ready checking ...");
             esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY);
         }
+        /* Parse response from check_src_ready query */
         else if (event == ESP_A2D_MEDIA_CTRL_ACK_EVT)
         {
             a2d = (esp_a2d_cb_param_t *)(param);
+            /* Send message to indicate starting of media transmission */
             if (a2d->media_ctrl_stat.cmd == ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY &&
                 a2d->media_ctrl_stat.status == ESP_A2D_MEDIA_CTRL_ACK_SUCCESS)
             {

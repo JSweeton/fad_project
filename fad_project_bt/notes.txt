@@ -1,1 +1,26 @@
-This program utilizes AVCRP and A2DP to communicate control commands between an ESP32 and a bluetooth device and to transmit audio to such a device.
+A2DP need to knows:
+- Before transmission, use esp_a2d_media_ctrl function with esp_a2d_media_ctrl_t type to send
+    device notifications of incoming transmission.
+    -ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY to see if source is ready (responds with ESP_A2D_MEDIA_CTRL_ACK_EVT)
+    -ESP_A2D_MEDIA_CTRL_START to indicate start of media transmission (responds with ESP_A2D_MEDIA_CTRL_ACK_EVT)
+
+    -ESP_A2D_MEDIA_CTRL_ACK_EVT is from: esp_a2d_cb_param_t->media_ctrl_stat.[cmd|status] where
+        -'status' is one of:
+        ESP_A2D_MEDIA_CTRL_ACK_SUCCESS = 0,        /*!< media control command is acknowledged with success */
+        ESP_A2D_MEDIA_CTRL_ACK_FAILURE,            /*!< media control command is acknowledged with failure */
+        ESP_A2D_MEDIA_CTRL_ACK_BUSY,               /*!< media control command is rejected, as previous command is not yet acknowledged */
+        -'cmd' is one of:
+        ESP_A2D_MEDIA_CTRL_NONE = 0,               /*!< dummy command */
+        ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY,          /*!< check whether AVDTP is connected, only used in A2DP source */
+        ESP_A2D_MEDIA_CTRL_START,                  /*!< command to set up media transmission channel */
+        ESP_A2D_MEDIA_CTRL_STOP,                   /*!< command to stop media transmission */
+        ESP_A2D_MEDIA_CTRL_SUSPEND,                /*!< command to suspend media transmission  */
+
+
+Order of Events:
+-Use GAP to search for target device(s) (Need to decide which headphones will be used)
+-Connect to target device
+-Use control protocols to set up device for media transmission
+-Begin ADC to convert microphone values to digital values
+-Run digital input audio through the currently selected algorithm
+-User either turns off headphones or uses device to stop transmission
