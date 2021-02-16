@@ -39,5 +39,6 @@ of the device (e.g. Discovering, Discovered, Unconnected, Connecting, Connected,
 
 ## General Flow
 The program first begins GAP discovery to find information about all local devices. Based on their respone, the 
-program can choose a device to connect to. 
+program can choose a device to connect to. Once our device connects to a peer A2DP-capable device (state=conneceted), 
+our device begins AVCRP communication with the device to prepare it for audio transmission.
 
