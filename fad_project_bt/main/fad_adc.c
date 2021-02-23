@@ -35,7 +35,7 @@ void adc_hdl_evt(uint16_t evt, void *params) {
 	case (ADC_BUFFER_READY_EVT): {
 		adc_evt_params *data = (adc_evt_params *) params;
 		ESP_LOGD(ADC_TAG, "ADC Value: %d", adc_buffer[0]);
-		algo_function(adc_buffer, dac_buffer, data->buff_pos.adc_pos, data->buff_pos.dac_pos);
+		algo_function(adc_buffer, dac_buffer, data->buff_pos.adc_pos, data->buff_pos.dac_pos, MULTISAMPLES);
 	}
 	}
 

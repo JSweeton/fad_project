@@ -5,7 +5,7 @@
  * Date: 9/17/2020
  *
  * Description:
- * This file starts the task handlers and queues for the FAD project.
+ * This file starts the task handlers and queues for the FAD program.
  */
 
 #include <stdint.h>
