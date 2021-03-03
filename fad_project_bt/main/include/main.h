@@ -10,6 +10,8 @@ enum {
 	FAD_BT_ADDR_FOUND,
 	FAD_BT_DEVICE_CONN,
 	ADC_INIT_EVT,
+	FAD_BT_NEED_GAP,
+	FAD_BT_SETTING_CHANGED,
 } stack_evt;
 
 /** 
@@ -17,10 +19,10 @@ enum {
  */
 typedef union {
 
-	/* FAD_BT_ADDR_FOUND */
+	/* for FAD_BT_ADDR_FOUND event */
 	struct addr_found_param_t {
 		esp_bd_addr_t peer_addr;	/* The address of the connectable device */
-		bool from_svh;				/* Whether the address came from storage or GAP */
+		bool from_nvs;				/* True if the address came from storage, false if GAP */
 	} addr_found;
 
 } fad_gap_cb_param_t;

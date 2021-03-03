@@ -19,7 +19,8 @@
 #include "esp_gap_bt_api.h"
 
 /**
- * @brief Initialize GAP and start discovery for a device
+ * @brief Initialize GAP and start discovery for a device. Returns address through
+ * event to main stack event handler.
  */
 esp_err_t fad_gap_start_discovery();
 

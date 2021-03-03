@@ -24,12 +24,11 @@
  */
 void fad_bt_init();
 
-
 /**
- * @brief If address is stored, return a saved bluetooth address from flash storage.
+ * @brief Begin A2DP and AVRCP connection to peer device
  * 
- * @returns Bluetooth address as a pointer to a char array. Must be Free'd (using free(pointer) function)
+ * @param peer_addr The bluetooth address of the peer device
  */
-uint8_t *fad_bt_get_stored_bd_addr();
+void fad_bt_connect(esp_bd_addr_t peer_addr);
 
 #endif

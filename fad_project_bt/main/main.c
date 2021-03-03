@@ -36,6 +36,7 @@
 #define FAD_TAG "FAD"
 #define FAD_NVS_NAMESPACE "FAD_BT"
 
+/* Determines whether program starts with test event. 0 for no test event, 1 for test event */
 #define TEST_MODE 0
 
 static char s_nvs_addr_key[15] = "NVS_PEER_ADDR";
@@ -77,6 +78,11 @@ void parse_error(esp_err_t err)
 	}
 }
 
+void print_global_peer_addr()
+{
+	ESP_LOGI(FAD_TAG, "Peer Addr: %x:%x:%x:%x:%x:%x", s_peer_bda[0], s_peer_bda[1], s_peer_bda[2], s_peer_bda[3], s_peer_bda[4], s_peer_bda[5]);
+}
+
 /* Set stored address, given a peer address array */
 void set_addr_in_nvs(esp_bd_addr_t peer_addr)
 {
@@ -93,7 +99,8 @@ void set_addr_in_nvs(esp_bd_addr_t peer_addr)
 	if (err)
 		ESP_LOGI(FAD_TAG, "Error detected");
 	else
-		ESP_LOGI(FAD_TAG, "Set successfully");
+		ESP_LOGI(FAD_TAG, "Set successfully.");
+		ESP_LOGI(FAD_TAG, "Set Addr: %x:%x:%x:%x:%x:%x", peer_addr[0], peer_addr[1], peer_addr[2], peer_addr[3], peer_addr[4], peer_addr[5]);
 }
 
 /* Get stored peer address from NVS and put it in global */
@@ -105,20 +112,15 @@ void get_addr_in_nvs()
 	esp_err_t err;
 	err = nvs_open(FAD_NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
 	err = nvs_get_u64(nvs_handle, s_nvs_addr_key, &encoded_addr);
+	parse_error(err);
 	nvs_close(nvs_handle);
 	memcpy(s_peer_bda, &encoded_addr, 6);
-
-	parse_error(err);
-
 }
 
-void print_global_peer_addr()
-{
-	ESP_LOGI(FAD_TAG, "Peer Addr: %x:%x:%x:%x:%x:%x", s_peer_bda[0], s_peer_bda[1], s_peer_bda[2], s_peer_bda[3], s_peer_bda[4], s_peer_bda[5]);
-}
 
 void fad_hdl_stack_evt(uint16_t evt, void *params)
 {
+	fad_gap_cb_param_t *p = (fad_gap_cb_param_t *)params;
 	switch (evt)
 	{
 	case (FAD_TEST_EVT):;
@@ -138,38 +140,58 @@ void fad_hdl_stack_evt(uint16_t evt, void *params)
 		nvs_flash_init();
 
 		ESP_LOGI(FAD_TAG, "Checking for stored device...");
-		uint8_t *stored_bda = fad_bt_get_stored_bd_addr();
-		memcpy(s_peer_bda, stored_bda, 6);
-		free(stored_bda);
+		get_addr_in_nvs();
 
 		// Check if there was a valid stored BDA address, skip gap if so
 		if (s_peer_bda[0] != 0)
 		{
-			fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_ADDR_FOUND, NULL, 0, NULL);
-			break;
-		}
+			ESP_LOGI(FAD_TAG, "Stored device found, connecting...");
 
-		ESP_LOGI(FAD_TAG, "Starting GAP...");
-		esp_err_t err = fad_gap_start_discovery();
-		parse_error(err);
+			fad_gap_cb_param_t p;
+			p.addr_found.from_nvs = true;
+
+			fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_ADDR_FOUND, (void*)&p, sizeof(fad_gap_cb_param_t), NULL);
+			break;
+		} else {
+			fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_NEED_GAP, NULL, 0, NULL);
+		}
 
 		break;
 
-	case (FAD_BT_ADDR_FOUND):;
-		fad_gap_cb_param_t *p = (fad_gap_cb_param_t *)params;
-		esp_bd_addr_t peer_addr;
-		memcpy(peer_addr, p->addr_found.peer_addr, sizeof(esp_bd_addr_t));
+	case FAD_BT_NEED_GAP:
+			ESP_LOGI(FAD_TAG, "Starting GAP...");
+			esp_err_t err = fad_gap_start_discovery();
+			parse_error(err);
+		break;
+
+	case FAD_BT_ADDR_FOUND:;
+
+		if (!p->addr_found.from_nvs) // Check if address is not from NVS. Address from NVS is already stored and set in global
+		{
+			ESP_LOGI(FAD_TAG, "Storing address...");
+			memcpy(s_peer_bda, p->addr_found.peer_addr, sizeof(esp_bd_addr_t));
+			set_addr_in_nvs(s_peer_bda);
+		}
 
 		ESP_LOGI(FAD_TAG, "Found a bluetooth address %2x %2x %2x %2x %2x %2x...",
 				 s_peer_bda[0], s_peer_bda[1], s_peer_bda[2], s_peer_bda[3], s_peer_bda[4], s_peer_bda[5]);
 
-		ESP_LOGI(FAD_TAG, "Storing address...");
-
 		ESP_LOGI(FAD_TAG, "Attempting to connect...");
+		fad_bt_connect(s_peer_bda);
 		break;
 
-	case (FAD_BT_DEVICE_CONN):
+	case FAD_BT_DEVICE_CONN:
 		ESP_LOGI(FAD_TAG, "Connected to a target device via BT. Initiating physical connection...");
+		/* Initialize physical audio measurements */
+		esp_err_t err = adc_timer_init();
+		err = adc_init();
+		parse_error(err);
+
+		/* TODO */
+		break;
+
+	case FAD_BT_SETTING_CHANGED:
+		ESP_LOGI(FAD_TAG, "User change of BT setting.");
 		/* TODO */
 		break;
 
