@@ -68,7 +68,6 @@ typedef void (* fad_app_cb_t) (uint16_t event, void *param);
 /*
  * Global variables
  */
-uint16_t adc_algo_size; //determines the chunck size of ADC values fed to the algorithm, not accounting for multisampling
 char *ALGO_TAG;
 
 uint16_t *adc_buffer;

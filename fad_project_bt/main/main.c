@@ -54,7 +54,8 @@ static char s_nvs_addr_key[15] = "NVS_PEER_ADDR";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 static algo_func_t s_algo_func = algo_template;
-static int s_algo_read_size = 512; 
+static int s_algo_read_size = 512;
+static algo_deinit_func_t s_algo_deinit_func = algo_template_deinit;
 
 void app_main(void)
 {
@@ -122,14 +123,21 @@ void get_addr_in_nvs()
 	memcpy(s_peer_bda, &encoded_addr, 6);
 }
 
+void handle_func_change(struct adc_change_algo_param_t *change_algo)
+{
+	ESP_LOGI(FAD_TAG, "Changing algorithm to %s.", change_algo->algo_name);
+	s_algo_deinit_func();
+	s_algo_func = change_algo->algo_func;
+	s_algo_deinit_func = change_algo->algo_deinit;
+
+}
 void fad_hdl_stack_evt(uint16_t evt, void *params)
 {
 	fad_main_cb_param_t *p = (fad_main_cb_param_t *)params;
 	esp_err_t err;
 	switch (evt)
 	{
-	case (FAD_TEST_EVT):;
-
+	case FAD_TEST_EVT:
 		ESP_LOGI(FAD_TAG, "Testing event...");
 		print_global_peer_addr();
 		ESP_LOGI(FAD_TAG, "Getting address in nvs...");
@@ -137,7 +145,7 @@ void fad_hdl_stack_evt(uint16_t evt, void *params)
 		print_global_peer_addr();
 		break;
 
-	case (FAD_APP_EVT_STACK_UP):
+	case FAD_APP_EVT_STACK_UP:
 		ESP_LOGI(FAD_TAG, "Initializing BT...");
 		fad_bt_init();
 
@@ -171,7 +179,7 @@ void fad_hdl_stack_evt(uint16_t evt, void *params)
 		parse_error(err);
 		break;
 
-	case FAD_BT_ADDR_FOUND:; // BT ADDR found, try and connect. On failure, gap is attmepted again.
+	case FAD_BT_ADDR_FOUND: // BT ADDR found, try and connect. On failure, gap is attmepted again.
 
 		if (!p->addr_found.from_nvs) // Check if address is not from NVS. Address from NVS is already stored and set in global
 		{
@@ -207,28 +215,27 @@ void fad_hdl_stack_evt(uint16_t evt, void *params)
 		break;
 
 	case FAD_ALGO_CHANGED: // The selected algorithm must be reselected.
-		ESP_LOGI(FAD_TAG, "Changing algorithm to %s.", p->change_algo.algo_name);
-		/* TODO */
+		handle_func_change(&(p->change_algo));
 		break;
 
 	case FAD_ADC_BUFFER_READY:;
 		struct adc_buffer_rdy_param buff = p->adc_buff_pos_info;
 		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);
 
-	/* TAKING ADVANTAGE OF FALL THROUGH BEHAVIOR. ALGO_FUNC WILL PREPARE DAC BUFFER */
-		__attribute__ ((fallthrough));	// Tell compiler to silence fallthrough warning
+		/* TAKING ADVANTAGE OF FALL THROUGH BEHAVIOR. ALGO_FUNC WILL PREPARE DAC BUFFER */
+		__attribute__((fallthrough)); // Tell compiler to silence fallthrough warning
 	case FAD_DAC_BUFFER_READY:;
 		fad_bt_params buff_info = {
 			.adv_buff_params.buffer = dac_buffer + buff.dac_pos,
 			.adv_buff_params.num_vals = s_algo_read_size / MULTISAMPLES,
-	};
-
+		};
+		/* With buffer updated, BT A2DP must be notified of buffer advancement */
 		fad_app_work_dispatch(fad_bt_stack_evt_handler, FAD_BT_ADVANCE_BUFF,
-							(void *)&buff_info, sizeof(fad_bt_params), NULL);
+							  (void *)&buff_info, sizeof(fad_bt_params), NULL);
 		break;
 
-default:
-	ESP_LOGI(FAD_TAG, "Unhandled event %d", evt);
-	break;
-}
+	default:
+		ESP_LOGI(FAD_TAG, "Unhandled event %d", evt);
+		break;
+	}
 }
