@@ -18,9 +18,10 @@
 #include "esp_log.h"
 #include "driver/uart.h"
 
-#include "fad_defs.h"
+#include "main.h"
 #include "fad_adc.h"
 #include "fad_dac.h"
+#include "fad_defs.h"
 #include "fad_app_core.h"
 
 #define TIMER_GROUP TIMER_GROUP_0
@@ -87,13 +88,12 @@ static void alarm_task(void *params) {
 	for(;;) {
 		xSemaphoreTake(alarmSemaphoreHandle, portMAX_DELAY);
 
-		adc_evt_params params = {
-			.buff_pos.adc_pos = adc_buffer_pos_copy,
-			.buff_pos.dac_pos = dac_buffer_pos_copy,
+		fad_main_cb_param_t params = {
+			.adc_buff_pos_info.adc_pos = adc_buffer_pos_copy,
+			.adc_buff_pos_info.dac_pos = dac_buffer_pos_copy,
 		};
 
-		fad_app_work_dispatch(adc_hdl_evt, ADC_BUFFER_READY_EVT, (void *) &params, sizeof(adc_evt_params), NULL);
-		// ESP_LOGI(TIMER_TAG, "ADC val: %4u Outputting: %4u", adc_buffer[1], dac_buffer[1]);
+		fad_app_work_dispatch(fad_hdl_stack_evt, FAD_ADC_BUFFER_READY, (void *) &params, sizeof(fad_main_cb_param_t), NULL);
 	}
 
 	vTaskDelete(alarmTaskHandle);

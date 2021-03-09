@@ -17,7 +17,27 @@
 #include "esp_system.h"
 #include "esp_bt_defs.h"
 
+enum  {
+    FAD_BT_CONNECT,
+    FAD_BT_ADVANCE_BUFF,
+} fad_bt_events;
+
+typedef union {
+    /* FAD_BT_CONNECT */
+    struct fad_bt_connect_params {
+        esp_bd_addr_t peer_addr;
+    } connect_params;
+
+    /* FAD_BT_ADVANCE_BUFF */
+    struct fad_bt_adv_buff_params {
+        uint8_t *buffer;    // The address of the buffer ready to be read from
+        int num_vals;       // The number of values that can be safely read from the buffer
+    } adv_buff_params;
+
+} fad_bt_params;
+
 /**
+ * 
  * @brief Initializes controller modules and Bluedroid functions. Must be called before any
  * other bluetooth actions.
  * 
@@ -30,5 +50,10 @@ void fad_bt_init();
  * @param peer_addr The bluetooth address of the peer device
  */
 void fad_bt_connect(esp_bd_addr_t peer_addr);
+
+/**
+ * @brief Func to send events for main bt events
+ */
+void fad_bt_stack_evt_handler(uint16_t event, void *param);
 
 #endif

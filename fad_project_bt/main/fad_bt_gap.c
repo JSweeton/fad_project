@@ -46,11 +46,11 @@ static void found_address(esp_bd_addr_t peer_addr)
     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
 
     /* Send found address back to main function for storage/connection */
-    fad_gap_cb_param_t p;
+    fad_main_cb_param_t p;
     p.addr_found.from_nvs = false;
     memcpy(p.addr_found.peer_addr, peer_addr, sizeof(esp_bd_addr_t));
 
-    fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_ADDR_FOUND, (void*)&p, sizeof(fad_gap_cb_param_t), NULL);
+    fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_ADDR_FOUND, (void*)&p, sizeof(fad_main_cb_param_t), NULL);
     ESP_LOGI(GAP_TAG, "Set Addr: %x:%x:%x:%x:%x:%x", peer_addr[0], peer_addr[1], peer_addr[2], peer_addr[3], peer_addr[4], peer_addr[5]);
 }
 
@@ -98,7 +98,7 @@ static void parse_props(int num_props, esp_bt_gap_dev_prop_t *props, esp_bd_addr
         return;
 
     uint32_t cod = 0;
-    int32_t rssi = -129; /* invalid value */
+    // int32_t rssi = -129; /* invalid value */
     uint8_t *eir = NULL;
 
     for (int i = 0; i < num_props; i++)
@@ -121,7 +121,7 @@ static void parse_props(int num_props, esp_bt_gap_dev_prop_t *props, esp_bd_addr
             break;
 
         case ESP_BT_GAP_DEV_PROP_RSSI:
-            rssi = *(int8_t *)props[i].val;
+            // rssi = *(int8_t *)props[i].val;
             break;
 
         case ESP_BT_GAP_DEV_PROP_EIR:

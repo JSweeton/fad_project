@@ -11,7 +11,6 @@
  * Organization: Collaboratory
  */
 
-
 #include <string.h>
 #include "esp_system.h"
 #include "esp_bt.h"
@@ -22,7 +21,9 @@
 #include "esp_avrc_api.h"
 #include "esp_a2dp_api.h"
 
+#include "fad_bt_main.h"
 #include "fad_app_core.h"
+#include "fad_defs.h"
 #include "main.h"
 
 // AVRCP used transaction label
@@ -56,13 +57,37 @@ static void bt_app_rc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t
 
 static void bt_av_hdl_avrc_ct_evt(uint16_t event, void *p_param);
 
-// static void bt_app_av_media_proc(uint16_t event, void *param);
+static void bt_secondary_stack_init();
 
 static esp_avrc_rn_evt_cap_mask_t s_avrc_peer_rn_cap;
 static const char *BT_TAG = "FAD_BT";
 static int s_media_state = APP_AV_MEDIA_STATE_IDLE;
 static int s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
+static uint8_t *s_out_buffer;
+static int s_out_pos;
+static int s_out_pos_limit;
+
+
+void fad_bt_stack_evt_handler(uint16_t event, void *param)
+{
+    fad_bt_params *p = param;
+    switch (event)
+    {
+    case FAD_BT_CONNECT:
+        memcpy(s_peer_bda, p->connect_params.peer_addr, sizeof(esp_bd_addr_t));
+        bt_secondary_stack_init();
+        esp_a2d_source_connect(s_peer_bda);
+        s_a2dp_conn_state = A2DP_CONN_STATE_CONNECTING;
+        break;
+
+    case FAD_BT_ADVANCE_BUFF:
+        s_out_buffer = p->adv_buff_params.buffer;
+        s_out_pos_limit = p->adv_buff_params.num_vals;
+        s_out_pos = 0;
+        break;
+    }
+}
 
 static void bt_secondary_stack_init()
 {
@@ -108,16 +133,6 @@ void fad_bt_init()
         ESP_LOGE(BT_TAG, "%s enable bluedroid failed\n", __func__);
         return;
     }
-
-}
-
-void fad_bt_connect(esp_bd_addr_t peer_addr)
-{
-    memcpy(s_peer_bda, peer_addr, sizeof(esp_bd_addr_t));
-    bt_secondary_stack_init();
-
-    esp_a2d_source_connect(peer_addr);
-    s_a2dp_conn_state = A2DP_CONN_STATE_CONNECTING;
 }
 
 static int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len)
@@ -127,25 +142,16 @@ static int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len)
         return 0;
     }
 
-    // generate square wave (comment out to switch to random)
-    uint8_t val = 0x7f;
-    for (int i = 0; i < len; i++)
-    {
-        data[i] = val;
-        if (i % 256 == 0)
-        {
-            val = val ? 0 : 0x7f;
-        }
-    }
+    ESP_LOGI(BT_TAG, "A2D cb Called w/ len %d", len);
 
-    // generate random sequence
-    // int val = (rand() % (1 << 16))  / 2;
-    // for (int i = 0; i < (len >> 1); i++) {
-    //     data[(i << 1)] = val & 0xff;
-    //     data[(i << 1) + 1] = (val >> 8) & 0xff;
-    // }
+    int copy_length = s_out_pos_limit - s_out_pos;
+    copy_length = (len < copy_length) ? len : copy_length;
 
-    return len;
+    memcpy(data, s_out_buffer + s_out_pos, copy_length);
+
+    s_out_pos = s_out_pos + copy_length;
+
+    return copy_length;
 }
 
 static void bt_app_rc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *param)
@@ -167,7 +173,6 @@ static void bt_app_rc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t
         ESP_LOGE(BT_TAG, "Invalid AVRC event: %d", event);
         break;
     }
-
 }
 
 static void bt_av_volume_changed(void)
@@ -261,12 +266,13 @@ static void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
         else if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED)
         {
             ESP_LOGI(BT_TAG, "a2dp disconnected");
-            s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;
             if (s_a2dp_conn_state == A2DP_CONN_STATE_CONNECTING)
             {
                 ESP_LOGI(BT_TAG, "Initializing GAP to find new device...");
                 fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_NEED_GAP, NULL, 0, NULL);
             }
+
+            s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;
         }
         break;
     }
@@ -298,12 +304,12 @@ void bt_av_notify_evt_handler(uint8_t event_id, esp_avrc_rn_param_t *event_param
         bt_av_volume_changed();
         break;
     case ESP_AVRC_RN_BATTERY_STATUS_CHANGE:
-    /* options for value (event_parameter->batt) */
-    // ESP_AVRC_BATT_NORMAL       = 0,               < normal state
-    // ESP_AVRC_BATT_WARNING      = 1,               < unable to operate soon
-    // ESP_AVRC_BATT_CRITICAL     = 2,               < cannot operate any more
-    // ESP_AVRC_BATT_EXTERNAL     = 3,               < plugged to external power supply
-    // ESP_AVRC_BATT_FULL_CHARGE  = 4,               < when completely charged from external power supply
+        /* options for value (event_parameter->batt) */
+        // ESP_AVRC_BATT_NORMAL       = 0,               < normal state
+        // ESP_AVRC_BATT_WARNING      = 1,               < unable to operate soon
+        // ESP_AVRC_BATT_CRITICAL     = 2,               < cannot operate any more
+        // ESP_AVRC_BATT_EXTERNAL     = 3,               < plugged to external power supply
+        // ESP_AVRC_BATT_FULL_CHARGE  = 4,               < when completely charged from external power supply
         ESP_LOGI(BT_TAG, "Battery changed: %d", event_parameter->batt);
         if (esp_avrc_rn_evt_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_TEST, &s_avrc_peer_rn_cap,
                                                ESP_AVRC_RN_BATTERY_STATUS_CHANGE))
@@ -374,7 +380,8 @@ static void bt_av_hdl_avrc_ct_evt(uint16_t event, void *p_param)
         {
             ESP_LOGI(BT_TAG, "Has battery status change operation");
             esp_avrc_ct_send_register_notification_cmd(APP_RC_CT_TL_RN_VOLUME_CHANGE, ESP_AVRC_RN_BATTERY_STATUS_CHANGE, 0);
-        } else 
+        }
+        else
         {
             ESP_LOGI(BT_TAG, "No battery status nofification ability.");
         }
@@ -391,4 +398,4 @@ static void bt_av_hdl_avrc_ct_evt(uint16_t event, void *p_param)
         ESP_LOGE(BT_TAG, "%s unhandled evt %d", __func__, event);
         break;
     }
-    }
+}
