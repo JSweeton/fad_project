@@ -30,11 +30,13 @@
 #define ALARM_STEP_SIZE (TIMER_FREQ / ALARM_FREQ)
 #define TASK_STACK_DEPTH 2048
 
-
 SemaphoreHandle_t alarmSemaphoreHandle;
 xTaskHandle alarmTaskHandle;
 
 static const char *TIMER_TAG = "TIMER";
+static bool s_timer_running = 0; 	// keep track of whether timer is on
+static int s_adc_read_size = 0;
+static fad_output_mode_t s_output_mode = FAD_OUTPUT_BT;
 
 /**
  * @brief Interrupt that is called every time the timer reaches the alarm value. Its purpose
@@ -45,35 +47,38 @@ static const char *TIMER_TAG = "TIMER";
  * 		-true if a higher priority task has awoken from handler execution
  * 		-false if no task was awoken
  */
-void IRAM_ATTR timer_intr_handler(void *arg) {
-	
-	timer_spinlock_take(TIMER_GROUP);	//At beginning and end, Timer API asks us to enclose ISR with spinlock _take and _give functions to function properly
+void IRAM_ATTR timer_intr_handler(void *arg)
+{
 
+	timer_spinlock_take(TIMER_GROUP); //At beginning and end, Timer API asks us to enclose ISR with spinlock _take and _give functions to function properly
 
 	//advance buffer, resetting to zero at max buffer position
-	adc_buffer_pos = (adc_buffer_pos + 1) % ADC_BUFFER_SIZE; //adc_buffer_pos is global
+	adc_buffer_pos = adc_buffer_pos + 1; //adc_buffer_pos is global
+	if (adc_buffer_pos == ADC_BUFFER_SIZE) adc_buffer_pos = 0;
+
+	// take reading
 	adc_buffer[adc_buffer_pos] = local_adc1_read(ADC_CHANNEL);
 
-
-	if (adc_buffer_pos % MULTISAMPLES == 0) { //wait to increment dac buffer and output only when the multisample number of ADC samples have been taken.
+	if (adc_buffer_pos % MULTISAMPLES == 0)
+	{ //wait to increment dac buffer and output only when the multisample number of ADC samples have been taken.
 		dac_buffer_pos = (dac_buffer_pos + 1) % DAC_BUFFER_SIZE;
-		dac_output_value(dac_buffer[dac_buffer_pos]);
+		if (s_output_mode == FAD_OUTPUT_DAC)
+		{
+			dac_output_value(dac_buffer[dac_buffer_pos]);
+		}
 	}
 
-	if (adc_buffer_pos % adc_algo_size == 0) {
+	if (adc_buffer_pos % s_adc_read_size == 0)
+	{
 		adc_buffer_pos_copy = adc_buffer_pos; //these copies provide a stable reference for the algorithm to work on
 		dac_buffer_pos_copy = dac_buffer_pos;
 
-		BaseType_t yield = false;
+		BaseType_t yield = false;	// required for next call
 		xSemaphoreGiveFromISR(alarmSemaphoreHandle, &yield);
 	}
 
-	//clear the interrupt
-	timer_group_clr_intr_status_in_isr(TIMER_GROUP, TIMER_NUMBER);
-
-	//reenable alarm
-	timer_group_enable_alarm_in_isr(TIMER_GROUP, TIMER_NUMBER);
-
+	timer_group_clr_intr_status_in_isr(TIMER_GROUP, TIMER_NUMBER); // clear the interrupt
+	timer_group_enable_alarm_in_isr(TIMER_GROUP, TIMER_NUMBER); // enable alarm
 	timer_spinlock_give(TIMER_GROUP);
 }
 
@@ -81,11 +86,13 @@ void IRAM_ATTR timer_intr_handler(void *arg) {
  * @brief FreeRTOS task that runs when the buffer is ready for output. 
  * Adds the appropriate function to the ADC task handler.
  * 
- * @param params [out] required as part of the task function definition
+ * @param params [in] required as part of the task function definition
  */
-static void alarm_task(void *params) {
+static void alarm_task(void *params)
+{
 
-	for(;;) {
+	for (;;)
+	{
 		xSemaphoreTake(alarmSemaphoreHandle, portMAX_DELAY);
 
 		fad_main_cb_param_t params = {
@@ -93,27 +100,23 @@ static void alarm_task(void *params) {
 			.adc_buff_pos_info.dac_pos = dac_buffer_pos_copy,
 		};
 
-		fad_app_work_dispatch(fad_hdl_stack_evt, FAD_ADC_BUFFER_READY, (void *) &params, sizeof(fad_main_cb_param_t), NULL);
+		fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_ADC_BUFFER_READY, (void *)&params, sizeof(fad_main_cb_param_t), NULL);
 	}
 
 	vTaskDelete(alarmTaskHandle);
 }
 
-/**
- * @brief 	Initializes the timer for the ADC input. Uses API found in driver/timer.h
- * @return
- * 		-ESP_OK if successful
- * 		-Non-zero if unsuccessful
- */
-esp_err_t adc_timer_init(void) {
+esp_err_t adc_timer_init(void)
+{
 	//API struct from driver/timer.h
 	timer_config_t adc_timer =
-			{ .alarm_en = TIMER_ALARM_EN,
-				.counter_en = TIMER_PAUSE,
-				.counter_dir = TIMER_COUNT_UP,
-				.auto_reload = TIMER_AUTORELOAD_EN,
-				.divider = CLOCK_DIVIDER, //80 MHz / 2000 = 40 kHz
-			};
+		{
+			.alarm_en = TIMER_ALARM_EN,
+			.counter_en = TIMER_PAUSE,
+			.counter_dir = TIMER_COUNT_UP,
+			.auto_reload = TIMER_AUTORELOAD_EN,
+			.divider = CLOCK_DIVIDER, //80 MHz / 2000 = 40 kHz
+		};
 
 	esp_err_t err;
 
@@ -128,20 +131,40 @@ esp_err_t adc_timer_init(void) {
 	xTaskCreate(alarm_task, "Interrupt_Alarm_Task_Handler", TASK_STACK_DEPTH,
 				0, configMAX_PRIORITIES - 3, &alarmTaskHandle);
 
-	if (err) ESP_LOGI(TIMER_TAG, "Error");
+	if (err)
+		ESP_LOGI(TIMER_TAG, "Error");
 
+	s_timer_running = false;
 	return err;
 }
 
-/**
- * @brief	Function to start the timer, meaning interrupts will start occurring
- * @return
- * 		-ESP_OK if successful
- */
-esp_err_t adc_timer_start(void) {
+esp_err_t adc_timer_start(void)
+{
 	esp_err_t ret;
 	ret = timer_start(TIMER_GROUP, TIMER_NUMBER);
+	s_timer_running = true;
 
 	return ret;
 }
 
+void adc_timer_pause(void)
+{
+	s_timer_running = false;
+	timer_pause(TIMER_GROUP, TIMER_NUMBER);
+}
+
+esp_err_t adc_timer_set_read_size(int adc_read_size)
+{
+	if (s_timer_running == true) return ESP_FAIL;
+
+	s_adc_read_size = adc_read_size;
+	return ESP_OK;
+}
+
+esp_err_t adc_timer_set_mode(fad_output_mode_t mode)
+{
+	if (s_timer_running == true) return ESP_FAIL;
+
+	s_output_mode = mode;
+	return ESP_OK;
+}

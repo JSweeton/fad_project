@@ -9,7 +9,7 @@ enum {
 	FAD_APP_EVT_STACK_UP,
 	FAD_TEST_EVT,
 	FAD_BT_ADDR_FOUND,
-	FAD_BT_DEVICE_CONN,
+	FAD_OUTPUT_READY,
 	ADC_INIT_EVT,
 	FAD_BT_NEED_GAP,
 	FAD_BT_SETTING_CHANGED,
@@ -44,11 +44,12 @@ typedef union {
 
 	/* FAD_ALGO_CHANGE */
 	struct adc_change_algo_param_t {
-		algo_type_t algo_type;
-		char * algo_name;
-		algo_func_t algo_func;
-		algo_init_func_t algo_init;
-		algo_deinit_func_t algo_deinit;
+		fad_algo_type_t algo_type;		// Type of algorithm, defined in fad_defs.h
+		fad_algo_mode_t algo_mode;		// The algorithm mode; determines params
+		// algo_func_t algo_func;			// Actual function
+		// algo_init_func_t algo_init;		// Initialization function
+		// algo_deinit_func_t algo_deinit;	// Deinitialization function
+		// char * algo_name;				// Name of algorithm
 	} change_algo;
 
 } fad_main_cb_param_t;
@@ -58,4 +59,4 @@ typedef union {
  * @param evt A stack_evt enum
  * @param params Any parameters for the event
  */
-void fad_hdl_stack_evt(uint16_t evt, void *params);
+void fad_main_stack_evt_handler(uint16_t evt, void *params);

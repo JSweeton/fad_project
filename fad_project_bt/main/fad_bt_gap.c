@@ -50,7 +50,7 @@ static void found_address(esp_bd_addr_t peer_addr)
     p.addr_found.from_nvs = false;
     memcpy(p.addr_found.peer_addr, peer_addr, sizeof(esp_bd_addr_t));
 
-    fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_ADDR_FOUND, (void*)&p, sizeof(fad_main_cb_param_t), NULL);
+    fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_BT_ADDR_FOUND, (void*)&p, sizeof(fad_main_cb_param_t), NULL);
     ESP_LOGI(GAP_TAG, "Set Addr: %x:%x:%x:%x:%x:%x", peer_addr[0], peer_addr[1], peer_addr[2], peer_addr[3], peer_addr[4], peer_addr[5]);
 }
 

@@ -38,14 +38,14 @@ static esp_err_t adc_buffer_init(void)
 		return ESP_ERR_NO_MEM;
 	}
 
-	dac_buffer = (uint8_t *)calloc(ADC_BUFFER_SIZE, sizeof(uint8_t));
+	dac_buffer = (uint8_t *)calloc(DAC_BUFFER_SIZE, sizeof(uint8_t));
 	if (dac_buffer == NULL)
 	{
 		return ESP_ERR_NO_MEM;
 	}
 
 	adc_buffer_pos = 0;
-	dac_buffer_pos = ADC_BUFFER_SIZE - adc_algo_size;
+	dac_buffer_pos = 0;
 
 	return ESP_OK;
 }

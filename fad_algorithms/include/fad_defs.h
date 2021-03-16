@@ -14,32 +14,61 @@
 
 /* ADC Definitions */
 #define ADC_BUFFER_SIZE 2048    //Buffer size for holding ADC data. 
-#define MULTISAMPLES 2          //Number of ADC samples per DAC output
+#define MULTISAMPLES 1          //Number of ADC samples per DAC output
 #define DAC_BUFFER_SIZE (ADC_BUFFER_SIZE / MULTISAMPLES)  //Buffer size for holding staged DAC data. Hold one DAC sample for each ADC sample divided by multisamples
 #define ADC_CHANNEL ADC_CHANNEL_6
 
 /* Timer Definitions */
-#define TIMER_FREQ 80000    //Frequency of the Timer
-#define ALARM_FREQ 16000    //Determines the frequency of ADC sampling and DAC output
+#define TIMER_FREQ 88200    //Frequency of the Timer
+#define ALARM_FREQ 11025    //Determines the frequency of ADC sampling and DAC output
+#define OUTPUT_FREQ (ALARM_FREQ / MULTISAMPLES)
 
 
+/* The outupt mode determines whether the device is outputting to physical headset or BT */
+typedef enum {
+    FAD_OUTPUT_DAC,
+    FAD_OUTPUT_BT
+} fad_output_mode_t;
+
+
+/* The type of algorithm to be used */
 typedef enum {
     FAD_ALGO_DELAY,
     FAD_ALGO_TEMPLATE,
     FAD_ALGO_FREQ_SHIFT,
     FAD_ALGO_PLL,
-} algo_type_t;
+} fad_algo_type_t;
 
+/* These modes dictate param choices for each function. Higher modes mean greater algo effects */
+typedef enum {
+    FAD_ALGO_MODE_1,
+    FAD_ALGO_MODE_2,
+    FAD_ALGO_MODE_3,
+} fad_algo_mode_t;
+
+/* The parameters to be passed to an algorithm initialization function */
 typedef union {
     /* FAD_ALGO_DELAY */
 
     /* FAD_ALGO_TEMPLATE */
     struct algo_template_params_t {
         int read_size;
+        int period;
     } algo_template_params;
-    
+} fad_algo_init_params_t;
 
-} algo_params_t;
+
+/*
+ * Global variables
+ */
+char *ALGO_TAG;
+
+uint16_t *adc_buffer;
+uint8_t *dac_buffer;
+uint16_t adc_buffer_pos;
+uint16_t dac_buffer_pos;
+uint16_t adc_buffer_pos_copy;
+uint16_t dac_buffer_pos_copy;
 
 /*
 * Function typedefs
@@ -56,7 +85,7 @@ typedef union {
  */
 typedef void (* algo_func_t) (uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples);
 
-typedef void (* algo_init_func_t) (algo_params_t *params);
+typedef void (* algo_init_func_t) (fad_algo_init_params_t *params);
 
 typedef void (* algo_deinit_func_t) ();
 
@@ -64,19 +93,6 @@ typedef void (* algo_deinit_func_t) ();
  * @brief     callback function for app events
  */
 typedef void (* fad_app_cb_t) (uint16_t event, void *param);
-
-/*
- * Global variables
- */
-char *ALGO_TAG;
-
-uint16_t *adc_buffer;
-uint8_t *dac_buffer;
-uint16_t adc_buffer_pos;
-uint16_t dac_buffer_pos;
-uint16_t adc_buffer_pos_copy;
-uint16_t dac_buffer_pos_copy;
-
 
 
 #endif

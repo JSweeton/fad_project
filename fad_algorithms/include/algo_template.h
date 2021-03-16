@@ -27,7 +27,7 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
  * @brief Initializes algorithm constants
  * @param params The params of data to process from the input
  */
-void algo_template_init(algo_params_t *params);
+void algo_template_init(fad_algo_init_params_t *params);
 
 /**
  * @brief Deinitalize the function. Remove memory allocations, etc.

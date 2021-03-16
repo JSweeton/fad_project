@@ -31,6 +31,11 @@
 #define APP_RC_CT_TL_RN_VOLUME_CHANGE (1)
 #define APP_RC_CT_TL_RN_BATTERY_CHANGE (2)
 
+// output aliasing (converts 1 output value to N output values)
+#define FAD_OUTPUT_BT_ALIASING 4
+
+static int s_i_pos = 0;
+
 enum
 {
     APP_AV_MEDIA_STATE_IDLE,
@@ -71,6 +76,7 @@ static int s_out_pos_limit;
 
 void fad_bt_stack_evt_handler(uint16_t event, void *param)
 {
+    ESP_LOGI(BT_TAG, "BT Stack evt: %d", event);
     fad_bt_params *p = param;
     switch (event)
     {
@@ -96,7 +102,7 @@ static void bt_secondary_stack_init()
 
     esp_avrc_rn_evt_cap_mask_t evt_set = {0};
     esp_avrc_rn_evt_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_SET, &evt_set, ESP_AVRC_RN_VOLUME_CHANGE);
-    assert(esp_avrc_tg_set_rn_evt_cap(&evt_set) == ESP_OK);
+    // assert(esp_avrc_tg_set_rn_evt_cap(&evt_set) == ESP_OK);
 
     /* initialize A2DP source */
     esp_a2d_register_callback(bt_app_a2d_cb);
@@ -135,21 +141,77 @@ void fad_bt_init()
     }
 }
 
+
 static int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len)
 {
     if (len < 0 || data == NULL)
     {
+        ESP_LOGI(BT_TAG, "Given length of 0");
         return 0;
     }
 
-    ESP_LOGI(BT_TAG, "A2D cb Called w/ len %d", len);
+    // Output is formatted as follows: Left lower byte, left upper, right lower byte, right upper
+    // Our input is mono 8 bit, so right and left are equal with lower bytes set to 0
+    // Also, we utilize aliasing to transform our ~11 kHz output to 44.1 kHz
 
-    int copy_length = s_out_pos_limit - s_out_pos;
+    /* Copy length in number of values sent to BT cb */
+    int copy_length = (s_out_pos_limit - s_out_pos) * FAD_OUTPUT_BT_ALIASING * 4;
     copy_length = (len < copy_length) ? len : copy_length;
 
-    memcpy(data, s_out_buffer + s_out_pos, copy_length);
+    ESP_LOGI(BT_TAG, "A2D cb Called w/ len %d Copy length %d", len, copy_length);
 
-    s_out_pos = s_out_pos + copy_length;
+    /* Sets how many outputs a single FAD output will expand to.
+    4 for 8-bit mono to 16-bit stereo conversion, rest for aliasing */
+    // int scaler = FAD_OUTPUT_BT_ALIASING * 4;
+    // for(int i = 0; i < copy_length / (scaler); i++) // for loop to go through each fad output value
+    // {
+    //     for (int j = 0; j < FAD_OUTPUT_BT_ALIASING; j++)
+    //     {
+    //         // set lower bytes to 0
+    //         data[(scaler * i) + (4 * j) + 1] = 0;
+    //         data[(scaler * i) + (4 * j) + 3] = 0;
+
+    //         // set left and right upper bytes to value
+    //         data[(scaler * i) + (4 * j) + 0] = s_out_buffer[s_out_pos + i];
+    //         data[(scaler * i) + (4 * j) + 2] = s_out_buffer[s_out_pos + i];
+    //     }
+    // }
+
+    copy_length = len;
+
+    uint8_t val = 100;
+    int scaler = FAD_OUTPUT_BT_ALIASING * 4;
+    for(int i = 0; i < copy_length / (scaler); i++) // for loop to go through each fad output value
+    {
+        if(i % 16 == 0) val = (val) ? 0 : 100;
+        for (int j = 0; j < FAD_OUTPUT_BT_ALIASING; j++)
+        {
+            // set lower bytes to 0
+            data[(scaler * i) + (4 * j) + 1] = val;
+            data[(scaler * i) + (4 * j) + 3] = val;
+
+            // set left and right upper bytes to value
+            data[(scaler * i) + (4 * j) + 0] = val;
+            data[(scaler * i) + (4 * j) + 2] = val;
+        }
+    }
+
+    char * output_string = calloc(128, 1); 
+    int n = 0;
+    for(int i = s_i_pos; i < s_i_pos + 8; i++)
+    {
+        n += sprintf(output_string + n, "[%d]:%d", i, data[i]);
+    }
+
+    s_i_pos += 4;
+
+    ESP_LOGI(BT_TAG, "%s\n", output_string);
+
+    // print some values from output buffer
+    // ESP_LOGI(BT_TAG, "[%d]:%d, [%d]:%d, [%d]:%d, [%d]:%d", s_out_pos, s_out_buffer[s_out_pos], s_out_pos + 1, s_out_buffer[s_out_pos + 1], s_out_pos + 32, s_out_buffer[s_out_pos + 32], s_out_pos + 33, s_out_buffer[s_out_pos + 33]);
+
+
+    s_out_pos += (copy_length / FAD_OUTPUT_BT_ALIASING);
 
     return copy_length;
 }
@@ -258,7 +320,7 @@ static void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
         if (a2d->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED)
         {
             ESP_LOGI(BT_TAG, "a2dp connected");
-            fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_DEVICE_CONN, NULL, 0, NULL);
+            fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_OUTPUT_READY, NULL, 0, NULL);
             ESP_LOGI(BT_TAG, "a2dp media ready checking ...");
             esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY);
             s_a2dp_conn_state = A2DP_CONN_STATE_CONNECTED;
@@ -269,7 +331,7 @@ static void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             if (s_a2dp_conn_state == A2DP_CONN_STATE_CONNECTING)
             {
                 ESP_LOGI(BT_TAG, "Initializing GAP to find new device...");
-                fad_app_work_dispatch(fad_hdl_stack_evt, FAD_BT_NEED_GAP, NULL, 0, NULL);
+                fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_BT_NEED_GAP, NULL, 0, NULL);
             }
 
             s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;
