@@ -2,7 +2,7 @@
  * fad_gpio.h
  * 
  * This file is used to interface with the GPIO pins of the ESP32. This includes
- * button handling and aux port continuity checks.
+ * button handling and aux port continuity checks. In progress.
  * 
  * 
  * Author: Corey Bean
@@ -12,8 +12,13 @@
 
 
 
-/**
- * @brief [TODO] Check GPIO pins for aux output.
- * @returns 'true' if wired aux output is present, 'false' otherwise
+/** 
+ * @brief Initialize GPIO file for functionality.
  */
-bool fad_gpio_check_wired_output();
+void fad_gpio_init();
+
+
+/**
+ * @brief Begin freeRTOS timer and start polling GPIO pins for changes in state.
+ */
+void fad_gpio_begin_polling();

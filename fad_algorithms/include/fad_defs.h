@@ -22,7 +22,18 @@
 #define TIMER_FREQ 88200    //Frequency of the Timer
 #define ALARM_FREQ 11025    //Determines the frequency of ADC sampling and DAC output
 #define OUTPUT_FREQ (ALARM_FREQ / MULTISAMPLES)
+#define FAD_GPIO_POLLING_PERIOD 32  // GPIO Check polling period in ms. Check GPIO every period.
 
+
+/* The GPIO assignments. Should not be between 34-39, as those have no pullup ability */
+// Buttons
+#define FAD_DISC_BN GPIO_NUM_1
+#define FAD_VOL_UP_BN GPIO_NUM_2
+#define FAD_VOL_DN_BN GPIO_NUM_3
+
+// Wired headset (HS) detection
+#define FAD_HS_DETECT_1 GPIO_NUM_16
+#define FAD_HS_DETECT_2 GPIO_NUM_17
 
 /* The outupt mode determines whether the device is outputting to physical headset or BT */
 typedef enum {

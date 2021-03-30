@@ -20,9 +20,14 @@ esp_err_t adc_timer_init(void);
 esp_err_t adc_timer_start(void);
 
 /**
- * @brief Stop timer routine
+ * @brief Stop timer routine, reset buffers
  */
 void adc_timer_stop(void);
+
+/**
+ * @brief Pause timer routine, don't reset buffers
+ */
+void adc_timer_pause(void);
 
 /**
  * @brief Set how many readings the timer should take before the data is sent to the algorithm.

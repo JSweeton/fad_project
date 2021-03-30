@@ -34,8 +34,6 @@
 // output aliasing (converts 1 output value to N output values)
 #define FAD_OUTPUT_BT_ALIASING 4
 
-static int s_i_pos = 0;
-
 enum
 {
     APP_AV_MEDIA_STATE_IDLE,
@@ -69,14 +67,17 @@ static const char *BT_TAG = "FAD_BT";
 static int s_media_state = APP_AV_MEDIA_STATE_IDLE;
 static int s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
-static uint8_t *s_out_buffer;
-static int s_out_pos;
+static int s_out_pos = 0;
 static int s_out_pos_limit;
 
+/// Delay for when BT output is just beginning
+static int s_buffer_fill_delay = 0;
+
+static int s_num_calls = 0;
 
 void fad_bt_stack_evt_handler(uint16_t event, void *param)
 {
-    ESP_LOGI(BT_TAG, "BT Stack evt: %d", event);
+    ESP_LOGD(BT_TAG, "BT Stack evt: %d", event);
     fad_bt_params *p = param;
     switch (event)
     {
@@ -88,9 +89,9 @@ void fad_bt_stack_evt_handler(uint16_t event, void *param)
         break;
 
     case FAD_BT_ADVANCE_BUFF:
-        s_out_buffer = p->adv_buff_params.buffer;
-        s_out_pos_limit = p->adv_buff_params.num_vals;
-        s_out_pos = 0;
+        // s_out_buffer = p->adv_buff_params.buffer;
+        // s_out_pos_limit = p->adv_buff_params.num_vals;
+        // s_out_pos = 0;
         break;
     }
 }
@@ -139,81 +140,61 @@ void fad_bt_init()
         ESP_LOGE(BT_TAG, "%s enable bluedroid failed\n", __func__);
         return;
     }
-}
 
+}
 
 static int32_t bt_app_a2d_data_cb(uint8_t *data, int32_t len)
 {
+    // DO NOT ESP_LOG IN HERE. Breaks bluetooth output. Only do it for debugging.
+
     if (len < 0 || data == NULL)
     {
         ESP_LOGI(BT_TAG, "Given length of 0");
         return 0;
     }
 
-    // Output is formatted as follows: Left lower byte, left upper, right lower byte, right upper
-    // Our input is mono 8 bit, so right and left are equal with lower bytes set to 0
-    // Also, we utilize aliasing to transform our ~11 kHz output to 44.1 kHz
+    /* Delay to let buffer fill to an appropriate level before data is read. Adds 256 sample delay (25ms). */
+    if (s_buffer_fill_delay < 1)
+    {
+        for (int i = 0; i < len; i++)
+        {
+            data[i] = 0;
+        }
+        s_buffer_fill_delay++;
+        return len;
+    }
 
-    /* Copy length in number of values sent to BT cb */
-    int copy_length = (s_out_pos_limit - s_out_pos) * FAD_OUTPUT_BT_ALIASING * 4;
-    copy_length = (len < copy_length) ? len : copy_length;
-
-    ESP_LOGI(BT_TAG, "A2D cb Called w/ len %d Copy length %d", len, copy_length);
+    /* 
+    *  Output is formatted as follows: Left lower byte, left upper, right lower byte, right upper
+    *  Our input is mono 8 bit, so right and left are equal with lower bytes set to 0
+    *  Also, we utilize aliasing to transform our ~11 kHz output to 44.1 kHz
+    */
 
     /* Sets how many outputs a single FAD output will expand to.
     4 for 8-bit mono to 16-bit stereo conversion, rest for aliasing */
-    // int scaler = FAD_OUTPUT_BT_ALIASING * 4;
-    // for(int i = 0; i < copy_length / (scaler); i++) // for loop to go through each fad output value
-    // {
-    //     for (int j = 0; j < FAD_OUTPUT_BT_ALIASING; j++)
-    //     {
-    //         // set lower bytes to 0
-    //         data[(scaler * i) + (4 * j) + 1] = 0;
-    //         data[(scaler * i) + (4 * j) + 3] = 0;
-
-    //         // set left and right upper bytes to value
-    //         data[(scaler * i) + (4 * j) + 0] = s_out_buffer[s_out_pos + i];
-    //         data[(scaler * i) + (4 * j) + 2] = s_out_buffer[s_out_pos + i];
-    //     }
-    // }
-
-    copy_length = len;
-
-    uint8_t val = 100;
     int scaler = FAD_OUTPUT_BT_ALIASING * 4;
-    for(int i = 0; i < copy_length / (scaler); i++) // for loop to go through each fad output value
+
+
+    for (int i = 0; i < (len / scaler); i++) // for loop to go through each fad output value
     {
-        if(i % 16 == 0) val = (val) ? 0 : 100;
         for (int j = 0; j < FAD_OUTPUT_BT_ALIASING; j++)
         {
             // set lower bytes to 0
-            data[(scaler * i) + (4 * j) + 1] = val;
-            data[(scaler * i) + (4 * j) + 3] = val;
+            data[(scaler * i) + (4 * j) + 0] = 0;
+            data[(scaler * i) + (4 * j) + 2] = 0;
 
             // set left and right upper bytes to value
-            data[(scaler * i) + (4 * j) + 0] = val;
-            data[(scaler * i) + (4 * j) + 2] = val;
+            data[(scaler * i) + (4 * j) + 1] = dac_buffer[s_out_pos];
+            data[(scaler * i) + (4 * j) + 3] = dac_buffer[s_out_pos];
         }
+
+        /* Advance and wrap buffer */
+        s_out_pos++;
+        if (s_out_pos >= DAC_BUFFER_SIZE)
+            s_out_pos = 0;
     }
 
-    char * output_string = calloc(128, 1); 
-    int n = 0;
-    for(int i = s_i_pos; i < s_i_pos + 8; i++)
-    {
-        n += sprintf(output_string + n, "[%d]:%d", i, data[i]);
-    }
-
-    s_i_pos += 4;
-
-    ESP_LOGI(BT_TAG, "%s\n", output_string);
-
-    // print some values from output buffer
-    // ESP_LOGI(BT_TAG, "[%d]:%d, [%d]:%d, [%d]:%d, [%d]:%d", s_out_pos, s_out_buffer[s_out_pos], s_out_pos + 1, s_out_buffer[s_out_pos + 1], s_out_pos + 32, s_out_buffer[s_out_pos + 32], s_out_pos + 33, s_out_buffer[s_out_pos + 33]);
-
-
-    s_out_pos += (copy_length / FAD_OUTPUT_BT_ALIASING);
-
-    return copy_length;
+    return len;
 }
 
 static void bt_app_rc_ct_cb(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *param)
@@ -332,6 +313,10 @@ static void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             {
                 ESP_LOGI(BT_TAG, "Initializing GAP to find new device...");
                 fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_BT_NEED_GAP, NULL, 0, NULL);
+            }
+            else if (s_a2dp_conn_state == A2DP_CONN_STATE_CONNECTED)
+            {
+                fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_OUTPUT_DISCONNECT, NULL, 0, NULL);
             }
 
             s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;

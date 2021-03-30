@@ -9,6 +9,7 @@
  */
 
 #include "algo_template.h"
+#include "esp_log.h"
 
 /* Defines how many values the algorithm will read from the ADC buffer. Should always be at least half of buffer size. */
 static int s_algo_template_read_size;
@@ -29,9 +30,8 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
     /* This algorithm simply outputs the input to the ADC */
     for (int i = 0; i < s_algo_template_read_size / multisamples; i++)
     {
-
-        //the following section averages the multisampled ADC data so that each DAC buffer space will have one corresponding ADC value
         uint16_t avg = 0;
+        //the following section averages the multisampled ADC data so that each DAC buffer space will have one corresponding ADC value
 
         for (int j = 0; j < multisamples; j++)
         {
@@ -42,7 +42,7 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
         /** END SECTION **/
 
         uint8_t val = 0;
-        if ((i / s_period) % 2 == 0) val = (avg >> 4) + 100; // Generates square wave with freq of 11k / 32  LARRY'S NUMBER: 430
+        if ((i / s_period) % 2 == 0) val = (avg >> 5) + 100; // Generates square wave with freq of 11k / period
         out_buff[out_pos + i] = val;
 
     }

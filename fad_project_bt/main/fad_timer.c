@@ -23,6 +23,7 @@
 #include "fad_dac.h"
 #include "fad_defs.h"
 #include "fad_app_core.h"
+#include "fad_gpio.h"
 
 #define TIMER_GROUP TIMER_GROUP_0
 #define TIMER_NUMBER TIMER_0
@@ -30,8 +31,8 @@
 #define ALARM_STEP_SIZE (TIMER_FREQ / ALARM_FREQ)
 #define TASK_STACK_DEPTH 2048
 
-SemaphoreHandle_t alarmSemaphoreHandle;
-xTaskHandle alarmTaskHandle;
+static SemaphoreHandle_t s_algo_notify_semaphore_handle;
+static xTaskHandle s_algo_notify_task_handle;
 
 static const char *TIMER_TAG = "TIMER";
 static bool s_timer_running = 0; 	// keep track of whether timer is on
@@ -74,7 +75,7 @@ void IRAM_ATTR timer_intr_handler(void *arg)
 		dac_buffer_pos_copy = dac_buffer_pos;
 
 		BaseType_t yield = false;	// required for next call
-		xSemaphoreGiveFromISR(alarmSemaphoreHandle, &yield);
+		xSemaphoreGiveFromISR(s_algo_notify_semaphore_handle, &yield);
 	}
 
 	timer_group_clr_intr_status_in_isr(TIMER_GROUP, TIMER_NUMBER); // clear the interrupt
@@ -93,7 +94,7 @@ static void alarm_task(void *params)
 
 	for (;;)
 	{
-		xSemaphoreTake(alarmSemaphoreHandle, portMAX_DELAY);
+		xSemaphoreTake(s_algo_notify_semaphore_handle, portMAX_DELAY);
 
 		fad_main_cb_param_t params = {
 			.adc_buff_pos_info.adc_pos = adc_buffer_pos_copy,
@@ -103,8 +104,9 @@ static void alarm_task(void *params)
 		fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_ADC_BUFFER_READY, (void *)&params, sizeof(fad_main_cb_param_t), NULL);
 	}
 
-	vTaskDelete(alarmTaskHandle);
+	vTaskDelete(s_algo_notify_task_handle);
 }
+
 
 esp_err_t adc_timer_init(void)
 {
@@ -127,9 +129,10 @@ esp_err_t adc_timer_init(void)
 	err = timer_set_alarm_value(TIMER_GROUP, TIMER_NUMBER, ALARM_STEP_SIZE);
 	err = timer_isr_register(TIMER_GROUP, TIMER_NUMBER, timer_intr_handler, 0, ESP_INTR_FLAG_IRAM, NULL);
 
-	alarmSemaphoreHandle = xSemaphoreCreateBinary();
+	s_algo_notify_semaphore_handle = xSemaphoreCreateBinary();
+
 	xTaskCreate(alarm_task, "Interrupt_Alarm_Task_Handler", TASK_STACK_DEPTH,
-				0, configMAX_PRIORITIES - 3, &alarmTaskHandle);
+				0, configMAX_PRIORITIES - 3, &s_algo_notify_task_handle);
 
 	if (err)
 		ESP_LOGI(TIMER_TAG, "Error");
@@ -151,6 +154,16 @@ void adc_timer_pause(void)
 {
 	s_timer_running = false;
 	timer_pause(TIMER_GROUP, TIMER_NUMBER);
+}
+
+void adc_timer_stop(void)
+{
+	s_timer_running = false;
+	timer_pause(TIMER_GROUP, TIMER_NUMBER);
+	dac_buffer_pos = 0;
+	dac_buffer_pos_copy = 0;
+	adc_buffer_pos = 0;
+	adc_buffer_pos_copy = 0;
 }
 
 esp_err_t adc_timer_set_read_size(int adc_read_size)

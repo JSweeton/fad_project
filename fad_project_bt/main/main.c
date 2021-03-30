@@ -30,6 +30,7 @@
 #include "fad_timer.h"
 #include "fad_bt_main.h"
 #include "fad_bt_gap.h"
+#include "fad_gpio.h"
 
 #include "algo_template.h"
 
@@ -37,19 +38,7 @@
 #define FAD_NVS_NAMESPACE "FAD_BT" // Needed for NVS storage utilization
 
 /* Determines whether program starts with test event. 0 for no test event, 1 for test event */
-#define TEST_MODE 0
-
-/* Potential states for state-machine behavior if main stack event handler gets too crowded */
-// enum {
-// 	FAD_INITIALIZING,
-// 	FAD_WAITING,
-// 	FAD_TESTING,
-// 	FAD_INACTIVE_DAC_SETUP,
-// 	FAD_INACTIVE_BT_SETUP,
-// 	FAD_ACTIVE_BT_OUTPUT,
-// 	FAD_ACTIVE_DAC_OUTPUT,
-// 	FAD_ALGO_TRANSITION,
-// } s_global_state;
+#define TEST_MODE 1
 
 static char s_nvs_addr_key[15] = "NVS_PEER_ADDR";
 static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
@@ -59,6 +48,9 @@ static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 static algo_func_t s_algo_func = algo_template;
 static int s_algo_read_size = 512;
 static algo_deinit_func_t s_algo_deinit_func = algo_template_deinit;
+
+/* Testing vars */
+static int s_adc_calls = 0;
 
 /* Called on ESP32 startup */
 void app_main(void)
@@ -173,13 +165,13 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		switch (mode)
 		{
 		case FAD_ALGO_MODE_1:
-			template_period = 32;
+			template_period = 8;
 			break;
 		case FAD_ALGO_MODE_2:
-			template_period = 64;
+			template_period = 16;
 			break;
 		case FAD_ALGO_MODE_3:
-			template_period = 128;
+			template_period = 64;
 			break;
 		default:
 			break;
@@ -206,6 +198,8 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	switch (evt)
 	{
 	case FAD_TEST_EVT:
+		fad_gpio_init();
+		fad_gpio_begin_polling();
 		break;
 
 	case FAD_APP_EVT_STACK_UP:
@@ -222,7 +216,8 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		ESP_LOGI(FAD_TAG, "Checking for stored device...");
 		get_addr_in_nvs();
 
-		bool wired_output_exists = fad_gpio_check_wired_output();
+		bool wired_output_exists = false;
+
 		if (wired_output_exists)
 		{
 			adc_timer_set_mode(FAD_OUTPUT_DAC);
@@ -288,6 +283,10 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		adc_timer_start();
 		break;
 
+	case FAD_OUTPUT_DISCONNECT: // Disconnected from output device, halt adc and timer, etc.
+		adc_timer_stop();
+		
+
 	case FAD_BT_SETTING_CHANGED:
 		/* If a volume setting changes, or turns bluetooth off, etc. */
 		ESP_LOGI(FAD_TAG, "User change of BT setting.");
@@ -302,18 +301,20 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	case FAD_ADC_BUFFER_READY:;
 		struct adc_buffer_rdy_param buff = p->adc_buff_pos_info;
 		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);
-		ESP_LOGI(FAD_TAG, "ADC BUFFER READY, dac_pos: %d, adc_pos: %d", buff.dac_pos, buff.adc_pos);
+		if(++s_adc_calls % 128 == 0)
+			ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
+		// ESP_LOGI(FAD_TAG, "ADC BUFFER READY, dac_pos: %d, adc_pos: %d", buff.dac_pos, buff.adc_pos);
 
 		/* TAKING ADVANTAGE OF FALL THROUGH BEHAVIOR. ALGO_FUNC WILL PREPARE DAC BUFFER */
 		__attribute__((fallthrough)); // Tell compiler to silence fallthrough warning
 	case FAD_DAC_BUFFER_READY:;
-		fad_bt_params buff_info = {
-			.adv_buff_params.buffer = dac_buffer + buff.dac_pos,
-			.adv_buff_params.num_vals = s_algo_read_size / MULTISAMPLES,
-		};
+		// fad_bt_params buff_info = {
+		// 	.adv_buff_params.buffer = dac_buffer + buff.dac_pos,
+		// 	.adv_buff_params.num_vals = s_algo_read_size / MULTISAMPLES,
+		// };
 		/* With buffer updated, BT A2DP must be notified of buffer advancement */
-		fad_app_work_dispatch(fad_bt_stack_evt_handler, FAD_BT_ADVANCE_BUFF,
-							  (void *)&buff_info, sizeof(fad_bt_params), NULL);
+		// fad_app_work_dispatch(fad_bt_stack_evt_handler, FAD_BT_ADVANCE_BUFF,
+		// 					  (void *)&buff_info, sizeof(fad_bt_params), NULL);
 		break;
 
 	default:
