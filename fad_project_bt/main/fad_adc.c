@@ -77,7 +77,7 @@ esp_err_t adc_init()
 	adc1_config_width(ADC_WIDTH_BIT_12);
 
 	//attenuation
-	adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN_DB_11);
+	adc1_config_channel_atten(ADC_CHANNEL, ADC_ATTEN_DB_2_5);
 
 	esp_err_t ret;
 

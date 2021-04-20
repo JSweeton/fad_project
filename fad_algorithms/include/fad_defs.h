@@ -25,15 +25,22 @@
 #define FAD_GPIO_POLLING_PERIOD 32  // GPIO Check polling period in ms. Check GPIO every period.
 
 
-/* The GPIO assignments. Should not be between 34-39, as those have no pullup ability */
+/* The GPIO assignments. */
+// Should not be between 34-39, as those have no pullup ability
 // Buttons
-#define FAD_DISC_BN GPIO_NUM_1
-#define FAD_VOL_UP_BN GPIO_NUM_2
-#define FAD_VOL_DN_BN GPIO_NUM_3
+#define FAD_DISC_BN GPIO_NUM_12
+#define FAD_VOL_UP_BN GPIO_NUM_13
+#define FAD_VOL_DN_BN GPIO_NUM_14
 
 // Wired headset (HS) detection
-#define FAD_HS_DETECT_1 GPIO_NUM_16
-#define FAD_HS_DETECT_2 GPIO_NUM_17
+#define FAD_HS_DETECT_1 GPIO_NUM_32
+#define FAD_HS_DETECT_2 GPIO_NUM_33
+
+/* Volume button characteristics. Values correspond to gpio_history values */
+#define FAD_VOL_CHANGE_DELAY 10 // Determines how long the button needs to be held before volume begins ramping continuously
+#define FAD_VOL_CHANGE_SLOPE 5 // Determines how quickly (period) the button volume ramps 
+#define FAD_VOL_STEP 5          // How much the volume jumps after every slope period (as a percentage of max volume)
+#define FAD_DISC_ON_DELAY 100 // How long the discovery button needs to be pressed for disc mode to activate
 
 /* The outupt mode determines whether the device is outputting to physical headset or BT */
 typedef enum {
@@ -60,6 +67,10 @@ typedef enum {
 /* The parameters to be passed to an algorithm initialization function */
 typedef union {
     /* FAD_ALGO_DELAY */
+    struct algo_delay_params_t {
+        int read_size;
+        int delay;
+    } algo_delay_params;
 
     /* FAD_ALGO_TEMPLATE */
     struct algo_template_params_t {

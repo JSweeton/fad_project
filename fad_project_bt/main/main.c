@@ -5,7 +5,7 @@
  * Date: 9/17/2020
  *
  * Description:
- * This file initializes the fad_project program and holds events.
+ * This file initializes the fad_project program and manages global events.
  */
 
 #include "main.h"
@@ -181,6 +181,7 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 			.algo_template_params.period = template_period
 		};
 		algo_template_init(&init_params);
+		break;
 	case FAD_ALGO_FREQ_SHIFT:
 	case FAD_ALGO_PLL:
 	case FAD_ALGO_DELAY:
@@ -197,9 +198,13 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	esp_err_t err;
 	switch (evt)
 	{
-	case FAD_TEST_EVT:
-		fad_gpio_init();
-		fad_gpio_begin_polling();
+	case FAD_TEST_EVT:	
+		err = adc_timer_init();
+		err = adc_init();
+		err = adc_timer_set_read_size(s_algo_read_size);
+		
+		parse_error(err);
+		adc_timer_start();
 		break;
 
 	case FAD_APP_EVT_STACK_UP:
@@ -211,6 +216,9 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		fad_algo_type_t type = FAD_ALGO_TEMPLATE;
 		get_algo_in_nvs(&type, &mode);
 		handle_algo_change(type, mode);
+
+		fad_gpio_init();
+		fad_gpio_begin_polling();
 
 		
 		ESP_LOGI(FAD_TAG, "Checking for stored device...");
@@ -243,12 +251,13 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		}
 		else
 		{
-			fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_BT_NEED_GAP, NULL, 0, NULL);
+			ESP_LOGI(FAD_TAG, "No device found. Waiting for user to start discovery.");
+			// fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_DISC_START, NULL, 0, NULL);
 		}
 
 		break;
 
-	case FAD_BT_NEED_GAP: // No stored address, so initialize and begin gap search
+	case FAD_DISC_START: // No stored address, so initialize and begin gap search
 		ESP_LOGI(FAD_TAG, "Starting GAP...");
 		err = fad_gap_start_discovery();
 		parse_error(err);
@@ -285,12 +294,11 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 	case FAD_OUTPUT_DISCONNECT: // Disconnected from output device, halt adc and timer, etc.
 		adc_timer_stop();
-		
+		break;
 
-	case FAD_BT_SETTING_CHANGED:
-		/* If a volume setting changes, or turns bluetooth off, etc. */
-		ESP_LOGI(FAD_TAG, "User change of BT setting.");
-		/* TODO */
+	case FAD_VOL_CHANGE:;
+		int vol_diff = p->vol_change_info.vol_change;
+		ESP_LOGI(FAD_TAG, "Volume changed by %d", vol_diff);
 		break;
 
 	case FAD_ALGO_CHANGED: // The selected algorithm must be reselected. Given type and mode.
@@ -301,20 +309,14 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	case FAD_ADC_BUFFER_READY:;
 		struct adc_buffer_rdy_param buff = p->adc_buff_pos_info;
 		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);
-		if(++s_adc_calls % 128 == 0)
-			ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
+		// ESP_LOGI(FAD_TAG, "Dac buffer: %d", dac_buffer[100]);
+		// if(++s_adc_calls % 128 == 0)
+		// 	ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
 		// ESP_LOGI(FAD_TAG, "ADC BUFFER READY, dac_pos: %d, adc_pos: %d", buff.dac_pos, buff.adc_pos);
 
 		/* TAKING ADVANTAGE OF FALL THROUGH BEHAVIOR. ALGO_FUNC WILL PREPARE DAC BUFFER */
 		__attribute__((fallthrough)); // Tell compiler to silence fallthrough warning
 	case FAD_DAC_BUFFER_READY:;
-		// fad_bt_params buff_info = {
-		// 	.adv_buff_params.buffer = dac_buffer + buff.dac_pos,
-		// 	.adv_buff_params.num_vals = s_algo_read_size / MULTISAMPLES,
-		// };
-		/* With buffer updated, BT A2DP must be notified of buffer advancement */
-		// fad_app_work_dispatch(fad_bt_stack_evt_handler, FAD_BT_ADVANCE_BUFF,
-		// 					  (void *)&buff_info, sizeof(fad_bt_params), NULL);
 		break;
 
 	default:

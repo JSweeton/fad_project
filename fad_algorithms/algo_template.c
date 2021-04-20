@@ -43,9 +43,11 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
 
         uint8_t val = 0;
         if ((i / s_period) % 2 == 0) val = (avg >> 5) + 100; // Generates square wave with freq of 11k / period
+        
         out_buff[out_pos + i] = val;
 
     }
+    // ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
 }
 
 void algo_template_init(fad_algo_init_params_t *params)

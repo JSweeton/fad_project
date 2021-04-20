@@ -8,12 +8,12 @@
 enum {
 	FAD_APP_EVT_STACK_UP,
 	FAD_TEST_EVT,
+	FAD_DISC_START,
 	FAD_BT_ADDR_FOUND,
 	FAD_OUTPUT_READY,
 	FAD_OUTPUT_DISCONNECT,
 	ADC_INIT_EVT,
-	FAD_BT_NEED_GAP,
-	FAD_BT_SETTING_CHANGED,
+	FAD_VOL_CHANGE,
 	FAD_DAC_BUFFER_READY,
 	FAD_ADC_BUFFER_READY,
 	FAD_ALGO_CHANGED,
@@ -52,6 +52,11 @@ typedef union {
 		// algo_deinit_func_t algo_deinit;	// Deinitialization function
 		// char * algo_name;				// Name of algorithm
 	} change_algo;
+
+	/* FAD_VOL_CHANGE */
+	struct fad_vol_change_param_t {
+		int vol_change;	// The new volume
+	} vol_change_info;
 
 } fad_main_cb_param_t;
 

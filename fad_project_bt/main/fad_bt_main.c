@@ -68,12 +68,9 @@ static int s_media_state = APP_AV_MEDIA_STATE_IDLE;
 static int s_a2dp_conn_state = A2DP_CONN_STATE_UNCONNECTED;
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 static int s_out_pos = 0;
-static int s_out_pos_limit;
 
 /// Delay for when BT output is just beginning
 static int s_buffer_fill_delay = 0;
-
-static int s_num_calls = 0;
 
 void fad_bt_stack_evt_handler(uint16_t event, void *param)
 {
@@ -311,8 +308,8 @@ static void bt_app_a2d_cb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
             ESP_LOGI(BT_TAG, "a2dp disconnected");
             if (s_a2dp_conn_state == A2DP_CONN_STATE_CONNECTING)
             {
-                ESP_LOGI(BT_TAG, "Initializing GAP to find new device...");
-                fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_BT_NEED_GAP, NULL, 0, NULL);
+                // ESP_LOGI(BT_TAG, "Initializing GAP to find new device...");
+                // fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_DISC_START, NULL, 0, NULL);
             }
             else if (s_a2dp_conn_state == A2DP_CONN_STATE_CONNECTED)
             {

@@ -11,6 +11,7 @@
 #include "algo_delay.h"
 #include <stdlib.h>
 #include <string.h>
+#include "fad_defs.h"
 
 void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples) {
 
@@ -39,11 +40,11 @@ void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
 
 }
 
-void algo_delay_init(int algo_size, int delay_size) {
-    algo_delay_read_size_g = algo_size;
-    delay_size_g = delay_size;
-    delay_buffer_g = malloc(sizeof(uint8_t) * delay_size);
-    memset(delay_buffer_g, 128, delay_size);
+void algo_delay_init(fad_algo_init_params_t *params) {
+    algo_delay_read_size_g = params->algo_delay_params.read_size;
+    delay_size_g = params->algo_delay_params.delay;
+    delay_buffer_g = malloc(sizeof(uint8_t) * delay_size_g);
+    memset(delay_buffer_g, 128, delay_size_g);
     delay_buffer_pos_g = 0;
 }
 
