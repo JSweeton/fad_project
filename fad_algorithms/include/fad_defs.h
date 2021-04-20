@@ -77,6 +77,13 @@ typedef union {
         int read_size;
         int period;
     } algo_template_params;
+
+    /* FAD_ALGO_FREQ_SHIFT */
+    struct algo_freq_shift_params_t {
+        int read_size;      // Number of reads from ADC per algo call
+        int shift_amount;   // Shift amount in Hz (based on sampling freq of 11025)
+    } algo_freq_shift_params;
+
 } fad_algo_init_params_t;
 
 
