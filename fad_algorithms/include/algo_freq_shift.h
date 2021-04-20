@@ -16,15 +16,19 @@
 
 
 
+/**
+ * @brief Frequency shifter...
+ * @param in_buff
+ * @param 
+ * @param   
+ */
+void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples);
 
-//double algo_freq_read_size_g;
-
-// double pitch_freq;
-
-// double[] shift_array = {};
-// double[] input_data = {};
 
 
+/** 
+ */
+void algo_freq_init(fad_algo_init_params_t *params);
 
 
 
