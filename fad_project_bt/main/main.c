@@ -33,19 +33,21 @@
 #include "fad_gpio.h"
 
 #include "algo_template.h"
+#include "algo_freq_shift.h"
+
 
 #define FAD_TAG "FAD"
 #define FAD_NVS_NAMESPACE "FAD_BT" // Needed for NVS storage utilization
 
 /* Determines whether program starts with test event. 0 for no test event, 1 for test event */
-#define TEST_MODE 1
+#define TEST_MODE 0
 
 static char s_nvs_addr_key[15] = "NVS_PEER_ADDR";
 static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 /* Algo function variables, subject to change on algorithm change. */
-static algo_func_t s_algo_func = algo_template;
+static algo_func_t s_algo_func = algo_template; //was algo_template
 static int s_algo_read_size = 512;
 static algo_deinit_func_t s_algo_deinit_func = algo_template_deinit;
 
@@ -182,7 +184,23 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		};
 		algo_template_init(&init_params);
 		break;
+
 	case FAD_ALGO_FREQ_SHIFT:
+		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
+		s_algo_func = algo_freq_shift;
+		s_algo_deinit_func = algo_template_deinit;
+		s_algo_read_size = 512;
+		int shift_amount = 2;
+		/*
+		algo_freq_shift_params_t init_params = {
+			.algo_freq_shift_params.read_size = s_algo_read_size,
+			.algo_freq_shift_params.shift_amount = shift_amount
+		};
+		*/
+		//algo_freq_init(&init_params);
+		algo_freq_init(&init_params);
+		break;
+
 	case FAD_ALGO_PLL:
 	case FAD_ALGO_DELAY:
 	default:
@@ -201,6 +219,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	case FAD_TEST_EVT:	
 		err = adc_timer_init();
 		err = adc_init();
+		err = dac_init();
 		err = adc_timer_set_read_size(s_algo_read_size);
 		
 		parse_error(err);
@@ -213,7 +232,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_TEMPLATE;
+		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT;
 		get_algo_in_nvs(&type, &mode);
 		handle_algo_change(type, mode);
 
@@ -224,7 +243,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		ESP_LOGI(FAD_TAG, "Checking for stored device...");
 		get_addr_in_nvs();
 
-		bool wired_output_exists = false;
+		bool wired_output_exists = true;
 
 		if (wired_output_exists)
 		{
@@ -252,7 +271,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		else
 		{
 			ESP_LOGI(FAD_TAG, "No device found. Waiting for user to start discovery.");
-			// fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_DISC_START, NULL, 0, NULL);
+			 fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_DISC_START, NULL, 0, NULL);
 		}
 
 		break;
@@ -287,6 +306,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		/* Initialize physical audio measurements */
 		err = adc_timer_init();
 		err = adc_init();
+		err = dac_init();
 		err = adc_timer_set_read_size(s_algo_read_size);
 		parse_error(err);
 		adc_timer_start();
@@ -309,10 +329,10 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	case FAD_ADC_BUFFER_READY:;
 		struct adc_buffer_rdy_param buff = p->adc_buff_pos_info;
 		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);
-		// ESP_LOGI(FAD_TAG, "Dac buffer: %d", dac_buffer[100]);
-		// if(++s_adc_calls % 128 == 0)
-		// 	ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
-		// ESP_LOGI(FAD_TAG, "ADC BUFFER READY, dac_pos: %d, adc_pos: %d", buff.dac_pos, buff.adc_pos);
+		 //ESP_LOGI(FAD_TAG, "Dac buffer: %d", dac_buffer[100]);
+		 //if(++s_adc_calls % 128 == 0);
+		 	//ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
+		 	//ESP_LOGI(FAD_TAG, "ADC BUFFER READY, dac_pos: %d, adc_pos: %d", buff.dac_pos, buff.adc_pos);
 
 		/* TAKING ADVANTAGE OF FALL THROUGH BEHAVIOR. ALGO_FUNC WILL PREPARE DAC BUFFER */
 		__attribute__((fallthrough)); // Tell compiler to silence fallthrough warning

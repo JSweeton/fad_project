@@ -33,7 +33,14 @@ esp_err_t dac_init(void) {
  * @param value Output value. Value range: 0 ~ 255.
  *        The corresponding range of voltage is 0v ~ VDD3P3_RTC.
  */
+
+ //Check DAC function to wrap in IRAM_ATTR 
+
+
+
 void IRAM_ATTR dac_output_value(uint8_t value) {
+    dac_output_voltage(DAC_CHANNEL_1, value);
+    /*
     if (DAC_CHANNEL == DAC_CHANNEL_1) {
         SENS.sar_dac_ctrl2.dac_cw_en1 = 0;
         RTCIO.pad_dac[DAC_CHANNEL].dac = value;
@@ -41,4 +48,6 @@ void IRAM_ATTR dac_output_value(uint8_t value) {
         SENS.sar_dac_ctrl2.dac_cw_en2 = 0;
         RTCIO.pad_dac[DAC_CHANNEL].dac = value;
     }
+    */
 }
+

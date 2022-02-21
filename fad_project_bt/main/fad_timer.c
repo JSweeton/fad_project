@@ -30,14 +30,16 @@
 #define CLOCK_DIVIDER (80000000 / TIMER_FREQ) //divider required to make timer frequency correct
 #define ALARM_STEP_SIZE (TIMER_FREQ / ALARM_FREQ)
 #define TASK_STACK_DEPTH 2048
+//#define OUTPUT_TAG "OUTPUT"
 
 static SemaphoreHandle_t s_algo_notify_semaphore_handle;
 static xTaskHandle s_algo_notify_task_handle;
 
+
 static const char *TIMER_TAG = "TIMER";
 static bool s_timer_running = 0; 	// keep track of whether timer is on
 static int s_adc_read_size = 0;
-static fad_output_mode_t s_output_mode = FAD_OUTPUT_BT;
+static fad_output_mode_t s_output_mode = FAD_OUTPUT_DAC;
 
 /**
  * @brief Interrupt that is called every time the timer reaches the alarm value. Its purpose
@@ -65,8 +67,10 @@ void IRAM_ATTR timer_intr_handler(void *arg)
 		dac_buffer_pos = (dac_buffer_pos + 1) % DAC_BUFFER_SIZE;
 		if (s_output_mode == FAD_OUTPUT_DAC)
 		{
+			//ESP_LOGI(TIMER_TAG, "DAC Buffer: %d", dac_buffer[dac_buffer_pos]);
 			dac_output_value(dac_buffer[dac_buffer_pos]);
 		}
+		
 	}
 
 	if (adc_buffer_pos % s_adc_read_size == 0)

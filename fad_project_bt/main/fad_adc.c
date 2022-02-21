@@ -58,11 +58,13 @@ static esp_err_t adc_buffer_init(void)
  */
 int IRAM_ATTR local_adc1_read(int channel)
 {
-	adc_ll_rtc_enable_channel(ADC_NUM_1, channel);
-	adc_ll_rtc_start_convert(ADC_NUM_1, channel);
-	while (adc_ll_rtc_convert_is_done(ADC_NUM_1) != true)
-		;
-	return adc_ll_rtc_get_convert_value(ADC_NUM_1);
+	//adc_ll_rtc_enable_channel(ADC_NUM_1, channel);
+	//adc_ll_rtc_start_convert(ADC_NUM_1, channel);
+	//while (adc_ll_rtc_convert_is_done(ADC_NUM_1) != true)
+	//	;
+	//return adc_ll_rtc_get_convert_value(ADC_NUM_1);
+
+	return adc1_get_raw(channel);
 }
 
 /**
