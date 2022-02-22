@@ -33,7 +33,7 @@
 #include "fad_gpio.h"
 
 #include "algo_template.h"
-#include "algo_freq_shift.h"
+#include "algo_delay.h"
 
 
 #define FAD_TAG "FAD"
@@ -186,23 +186,30 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		break;
 
 	case FAD_ALGO_FREQ_SHIFT:
+		/*
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
 		s_algo_func = algo_freq_shift;
 		s_algo_deinit_func = algo_template_deinit;
 		s_algo_read_size = 512;
 		int shift_amount = 2;
-		/*
+		
 		algo_freq_shift_params_t init_params = {
 			.algo_freq_shift_params.read_size = s_algo_read_size,
 			.algo_freq_shift_params.shift_amount = shift_amount
 		};
-		*/
+		
 		//algo_freq_init(&init_params);
-		algo_freq_init(&init_params);
+		//algo_freq_init(&init_params);
 		break;
+		*/
 
 	case FAD_ALGO_PLL:
 	case FAD_ALGO_DELAY:
+		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
+		s_algo_func = algo_delay;
+		s_algo_deinit_func = algo_delay_deinit;
+		s_algo_read_size = 512;
+	algo_delay_init();
 	default:
 		ESP_LOGI(FAD_TAG, "Unhandled algo function %d", type);
 		break;
@@ -232,7 +239,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT;
+		fad_algo_type_t type = FAD_ALGO_DELAY;
 		get_algo_in_nvs(&type, &mode);
 		handle_algo_change(type, mode);
 

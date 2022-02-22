@@ -38,6 +38,6 @@ void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
  * @brief Initializes algorithm constants
  * @param algo_size The amount of data to process from the input
  */
-void algo_delay_init(fad_algo_init_params_t *params);
+void algo_delay_init();  //fad_algo_init_params_t *params
 
 void algo_delay_deinit();
