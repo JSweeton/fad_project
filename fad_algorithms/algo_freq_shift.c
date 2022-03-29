@@ -16,9 +16,10 @@
 #include <math.h>
 
 
-static int algo_freq_read_size_g;
+static int algo_freq_read_size_g = 512;
 
-static int pitch_freq;
+static int pitch_freq = 2;
+
 
 static int8_t[] shift_array_s;
 static int shift_array_period_s = 0;
@@ -69,11 +70,11 @@ void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint
 }
 
 
-
-void algo_freq_init(fad_algo_init_params_t *params)
+void algo_freq_init()
+//void algo_freq_init(fad_algo_init_params_t *params)
 {
-    algo_freq_read_size_g = params->algo_freq_shift_params.read_size;
-    int pitch_freq = params->algo_freq_shift_params.shift_amount;
+    //algo_freq_read_size_g = params->algo_freq_shift_params.read_size;
+    //int pitch_freq = params->algo_freq_shift_params.shift_amount;
 
     int period = ALARM_FREQ / pitch_freq;
     shift_array_period_s = period;

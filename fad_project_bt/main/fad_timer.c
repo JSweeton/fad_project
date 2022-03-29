@@ -103,7 +103,7 @@ static void alarm_task(void *params)
 			.adc_buff_pos_info.adc_pos = adc_buffer_pos_copy,
 			.adc_buff_pos_info.dac_pos = dac_buffer_pos_copy,
 		};
-
+		
 		ESP_LOGI(TIMER_TAG, "ADC Buffer: %d", adc_buffer[adc_buffer_pos]);
 		fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_ADC_BUFFER_READY, (void *)&params, sizeof(fad_main_cb_param_t), NULL);
 	}
