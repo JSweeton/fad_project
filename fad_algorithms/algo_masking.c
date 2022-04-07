@@ -10,11 +10,12 @@
 
 #include "algo_masking.h"
 #include "esp_log.h"
+#include "FFT.h"
 
 #define ALGO_TAG "ALGO_MASKING"
 
 /* Defines how many values the algorithm will read from the ADC buffer. Should always be at least half of buffer size. */
-static int s_algo_template_read_size = 1024; // was 512
+static int s_algo_template_read_size = 2048; // was 512
 
 /* References the sampling freq of the adc */
 static int s_algo_sampling_freq = 40000;
@@ -62,8 +63,7 @@ void algo_masking_init(fad_algo_init_params_t *params)
 {
     s_algo_template_read_size = params->algo_template_params.read_size;
     s_period = params->algo_template_params.period;
-
-
+    fft_config_t *real_fft_plan = fft_init(s_algo_template_read_size, FFT_REAL, FFT_FORWARD, , fft_output);
 }
 
 void algo_masking_deinit()
