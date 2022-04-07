@@ -14,7 +14,19 @@
 #define ALGO_TAG "ALGO_MASKING"
 
 /* Defines how many values the algorithm will read from the ADC buffer. Should always be at least half of buffer size. */
-static int s_algo_template_read_size = 512;
+static int s_algo_template_read_size = 1024; // was 512
+
+/* References the sampling freq of the adc */
+static int s_algo_sampling_freq = 40000;
+
+/*Determines the time of which data is captured */
+static int s_algo_total_time = s_algo_template_read_size/s_algo_sampling_freq;
+
+/* Stores max_magnitude */
+volatile float s_algo_max_magnitude = 0;
+
+/* Stores fundamental frequency */
+volatile float s_algo_fundamenta_freq = 0;
 
 /* Determines the period of the square wave */
 static int s_period = 30;
@@ -35,21 +47,9 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
 
     //ESP_LOGI(ALGO_TAG, "s_algo_template_read_size = %d", s_algo_template_read_size);
 
-    for (int i = 0; i < s_algo_template_read_size / multisamples; i++)
+    for (int i = 0; i < s_algo_template_read_size; i++)
     {
-        //uint16_t avg = 0;
-        //the following section averages the multisampled ADC data so that each DAC buffer space will have one corresponding ADC value
-
-        //for (int j = 0; j < multisamples; j++)
-        //{
-         //   avg += in_buff[in_pos + (i * multisamples) + j];
-        //}
-
-        //avg = avg / multisamples;
-        /** END SECTION **/
-
-        //uint8_t val = 0;
-        //if ((i / s_period) % 2 == 0) val = (avg >> 5) + 100; // Generates square wave with freq of 11k / period
+        
         
         uint8_t val = in_buff[in_pos + i];
         out_buff[out_pos + i] = val;
@@ -62,6 +62,8 @@ void algo_masking_init(fad_algo_init_params_t *params)
 {
     s_algo_template_read_size = params->algo_template_params.read_size;
     s_period = params->algo_template_params.period;
+
+
 }
 
 void algo_masking_deinit()
