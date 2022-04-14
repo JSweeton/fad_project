@@ -55,6 +55,7 @@ typedef enum {
     FAD_ALGO_TEMPLATE,
     FAD_ALGO_FREQ_SHIFT,
     FAD_ALGO_PLL,
+    FAD_ALGO_MASKING,
 } fad_algo_type_t;
 
 /* These modes dictate param choices for each function. Higher modes mean greater algo effects */
@@ -83,6 +84,11 @@ typedef union {
         int read_size;      // Number of reads from ADC per algo call
         int shift_amount;   // Shift amount in Hz (based on sampling freq of 11025)
     } algo_freq_shift_params;
+
+    /* FAD_ALGO_MASKING */
+    struct algo_masking_params_t {
+        int read_size;      // Number of reads from ADC per algo call
+    } algo_masking_params;
 
 } fad_algo_init_params_t;
 

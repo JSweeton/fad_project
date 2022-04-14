@@ -9,7 +9,9 @@
  */
 
 #include <stdint.h>
+#include <math.h>
 #include "fad_defs.h"
+#include "fft.h"
 
 /* Define any globals */
 

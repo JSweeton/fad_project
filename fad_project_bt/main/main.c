@@ -187,7 +187,7 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		algo_template_init(&init_params);
 		break;
 
-	case FAD_ALGO_FREQ_SHIFT:
+	//case FAD_ALGO_FREQ_SHIFT:
 		/*
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
 		s_algo_func = algo_freq_shift;
@@ -206,34 +206,13 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		break;
 		*/
 		
-	/*
+	
 	case FAD_ALGO_MASKING:
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
 		s_algo_func = algo_masking;
 		s_algo_deinit_func = algo_masking_deinit;
-		s_algo_read_size = 512;
-		int template_period = 0;
-		switch (mode)
-		{
-		case FAD_ALGO_MODE_1:
-			template_period = 8;
-			break;
-		case FAD_ALGO_MODE_2:
-			template_period = 16;
-			break;
-		case FAD_ALGO_MODE_3:
-			template_period = 64;
-			break;
-		default:
-			break;
-		}
-		fad_algo_init_params_t init_params = {
-			.algo_template_params.read_size = s_algo_read_size,
-			.algo_template_params.period = template_period
-		};
-		algo_masking_init(&init_params);
+		s_algo_read_size = 2048;
 		break;
-		*/
 
 	case FAD_ALGO_DELAY:
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
@@ -270,7 +249,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_TEMPLATE;
+		fad_algo_type_t type = FAD_ALGO_MASKING;
 		get_algo_in_nvs(&type, &mode);
 		handle_algo_change(type, mode);
 
