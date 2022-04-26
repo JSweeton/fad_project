@@ -35,7 +35,8 @@
 #include "algo_template.h"
 #include "algo_delay.h"
 #include "algo_freq_shift.h"
-#include "algo_masking.h"
+//#include "algo_masking.h"
+#include "fft.h"
 
 
 #define FAD_TAG "FAD"
@@ -49,9 +50,9 @@ static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 /* Algo function variables, subject to change on algorithm change. */
-static algo_func_t s_algo_func = algo_template; //was algo_template
+static algo_func_t s_algo_func = algo_delay; //was algo_template
 static int s_algo_read_size = 512;
-static algo_deinit_func_t s_algo_deinit_func = algo_template_deinit;
+static algo_deinit_func_t s_algo_deinit_func = algo_delay_deinit;
 
 /* Testing vars */
 static int s_adc_calls = 0;
@@ -206,14 +207,15 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		break;
 		*/
 		
-	
+	/*
 	case FAD_ALGO_MASKING:
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
 		s_algo_func = algo_masking;
 		s_algo_deinit_func = algo_masking_deinit;
 		s_algo_read_size = 2048;
+		//algo_masking_init();
 		break;
-
+	*/
 	case FAD_ALGO_DELAY:
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
 		s_algo_func = algo_delay;
@@ -249,7 +251,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_MASKING;
+		fad_algo_type_t type = FAD_ALGO_DELAY;
 		get_algo_in_nvs(&type, &mode);
 		handle_algo_change(type, mode);
 
@@ -346,8 +348,8 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	case FAD_ADC_BUFFER_READY:;
 		struct adc_buffer_rdy_param buff = p->adc_buff_pos_info;
 		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);
-		 //ESP_LOGI(FAD_TAG, "Dac buffer: %d", dac_buffer[100]);
-		 //if(++s_adc_calls % 128 == 0);
+		//ESP_LOGI(FAD_TAG, "Dac buffer: %d", dac_buffer[100]);
+		//if(++s_adc_calls % 128 == 0);
 		 	//ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
 		 	//ESP_LOGI(FAD_TAG, "ADC BUFFER READY, dac_pos: %d, adc_pos: %d", buff.dac_pos, buff.adc_pos);
 

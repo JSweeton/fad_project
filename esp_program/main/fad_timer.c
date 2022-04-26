@@ -27,7 +27,7 @@
 #define TIMER_NUMBER TIMER_0
 #define CLOCK_DIVIDER (80000000 / TIMER_FREQ) //divider required to make timer frequency correct
 #define ALARM_STEP_SIZE (TIMER_FREQ / ALARM_FREQ)
-#define TASK_STACK_DEPTH 2048
+#define TASK_STACK_DEPTH 8192 //was 2048
 
 
 SemaphoreHandle_t alarmSemaphoreHandle;
