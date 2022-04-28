@@ -54,8 +54,8 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
         //if ((i / s_period) % 2 == 0) val = (avg >> 5) + 100; // Generates square wave with freq of 11k / period
 
         //In theory the following code will be passed the correct values from the fft transform:
-        uint8_t val = (val + ((sig_amp * sig_freq) / sampling_rate));
-        out_buff[out_pos + i] = val;
+        //uint8_t val = (val + ((sig_amp * sig_freq) / sampling_rate));
+        //out_buff[out_pos + i] = val;
 
     }
      ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);

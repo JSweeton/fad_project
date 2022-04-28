@@ -28,6 +28,9 @@ volatile float s_algo_max_magnitude = 0;
 /* Stores fundamental frequency */
 volatile float s_algo_fundamental_freq = 0;
 
+/* Stores max_amplitude */
+volatile float s_algo_max_amplitude = 0;
+
 /* Determines the period of the square wave */
 static int s_period = 30;
 
@@ -36,6 +39,8 @@ static int switching_voltage = 2048;
 float fft_input[2048];
 
 float fft_output[2048];
+
+uint8_t val = 0;
 
 void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
@@ -62,8 +67,9 @@ void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
     for (int i = 0; i < s_algo_template_read_size; i++)
     {
         real_fft_plan->input[i] = in_buff[in_pos + i];
-        if(i == 3000){ //s_algo_template_read_size+1
+        if(i == 2047){ //s_algo_template_read_size+1
             fft_execute(real_fft_plan);
+            
             for (int k = 1 ; k < real_fft_plan->size / 2 ; k++)
             {
             //The real part of a magnitude at a frequency is 
@@ -75,16 +81,26 @@ void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
                 {
                     s_algo_max_magnitude = mag;
                     s_algo_fundamental_freq = freq;
+                    s_algo_max_amplitude = (2/2048) * mag;
                 }
             }
+            //out_buff[i] = s_algo_fundamental_freq;
+
+            val = 0;
+            
             for (int j = 0; j < s_algo_template_read_size; j++){
-                out_buff[out_pos+j] = s_algo_fundamental_freq;
+
+                val = (val + ((s_algo_max_amplitude * s_algo_fundamental_freq) / s_algo_sampling_freq));
+                out_buff[j] = val;
+                //ESP_LOGI(ALGO_TAG, "running algo... %d", s_algo_fundamental_freq);
             }
+            
         }
+        //if (i != 2047) out_buff[i] = 50;
         //uint8_t val = in_buff[in_pos + i];
         //out_buff[out_pos + i] = val;
-        //fft_destroy(real_fft_plan);
     }
+    fft_destroy(real_fft_plan);
     //ESP_LOGI(ALGO_TAG, "running algo... %d", freq);
     //ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
 }
