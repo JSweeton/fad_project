@@ -1,11 +1,12 @@
 /**
  * algo_masking.c
- * Author: Corey Bean,
+ * Author: Corey Bean, Chad Long, Tim Fair
  * Organization: Messiah Collaboratory
  * Date: 10/12/2020
  *
  * Description:
- * This file demonstrates the template for the algorithm file. It simply outputs a square wave of a varied period.
+ * This algo imitates the Edinburgh Masker by finding the fft of the input data over a sampled period and
+ * using this to create a sawtooth wave at the frequency of the found fundamental frequency.
  */
 
 #include "algo_masking.h"
@@ -69,12 +70,15 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
 
     for (int i = 0; i < s_algo_template_read_size; i++)
     {
+        //Input current input buffer data into dataset used for fft calc
         real_fft_plan->input[i] = in_buff[in_pos + i];
         ESP_LOGI(TAG, "val: %d", in_buff[in_pos + i]);
 
         //In theory the following code will be passed the correct values from the fft transform:
         val = (val + ((s_algo_max_amplitude * s_algo_fundamental_freq) / s_algo_sampling_freq));
         out_buff[out_pos + i] = val;
+
+        //Execute fft when buffer fills -not working as expected, possibly looping too quickly/fft not executing properly
         if(i == 2047){ //s_algo_template_read_size+1
             fft_execute(real_fft_plan);
             

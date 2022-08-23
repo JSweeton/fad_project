@@ -5,7 +5,8 @@
  * Date: 10/12/2020
  *
  * Description:
- * This file demonstrates the template for the algorithm file.
+ * This algo imitates the Edinburgh Masker by finding the fft of the input data over a sampled period and
+ * using this to create a sawtooth wave at the frequency of the found fundamental frequency.
  */
 
 #include <stdint.h>

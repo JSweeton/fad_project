@@ -1,6 +1,6 @@
 /**
  * algo_template.c
- * Author: Corey Bean,
+ * Author: Corey Bean, Chad Long, Tim Fair
  * Organization: Messiah Collaboratory
  * Date: 10/12/2020
  *

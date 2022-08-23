@@ -1,11 +1,12 @@
 /**
- * algo_template.c
- * Author: Corey Bean,
+ * algo_delay.c
+ * Author: Corey Bean, Chad Long, Tim Fair
  * Organization: Messiah Collaboratory
- * Date: 10/12/2020
+ * Date: 08/23/2022
  *
  * Description:
- * This file demonstrates the template for the algorithm file.
+ * This algorithms purposely creates a shifted array that allows for input sound data
+ * to be offset by a predetermined amount and create delayed feedback for the user.
  */
 
 #include "algo_delay.h"
@@ -30,6 +31,7 @@ void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
 
     for(int i = 0; i < (algo_delay_read_size_g) / multisamples; i++)
     {
+        //Place the appropriate delayed value into the out_buff
         out_buff[out_pos + i] = delay_buffer_g[delay_buffer_pos_g];
         
         /* Get average of last multisample values from adc */
@@ -41,12 +43,15 @@ void algo_delay(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t 
         // /* Actual average division */
         // multisample_average /= multisamples;
 
+        //Place the current input data into the offset location in delay_buffer_g
         delay_buffer_g[delay_buffer_pos_g] = in_buff[in_pos + i] >> 4; //multisample_average;
 
         // if (i % 10 == 0) delay_buffer_g[delay_buffer_pos_g] = 255;
 
+        //Increment the delay buffer location
         delay_buffer_pos_g++;
 
+        //reset delay buffer pos
         if (delay_buffer_pos_g == delay_size_g) delay_buffer_pos_g = 0;
 
     }

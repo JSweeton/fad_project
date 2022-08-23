@@ -18,8 +18,10 @@ The algorithm must include:
 The following is a short list and description of the available algorithms. Some are still in the process of being created, or need to be updated to match the template.
 
 ## Ready
-- algo_template: Outputs a square wave with a set frequency, shifting output volume based on incoming ADC level
-## In Progress
+- algo_template: Outputs the input signal value to create an imitation of the input signal using the DAC Output
 - algo_delay: Repeats the microphone input back to the user with a specified time delay
+## In Progress
 - algo_freq_shift: Takes the microphone input and shifts its incoming frequencies a specified amount. Outputs these shifted frequencies back to the user.
+- algo_masking: Imitates the Edinburgh Masker by taking microphone input, running an fft on a sample of the input (shifting with time), finds the fundamental frequency, and outputs a sawtooth wave at that freqency.
+## Reference Only
 - algo_white: Outputs white noise based on the input level. Louder inputs result in louder white noise.
