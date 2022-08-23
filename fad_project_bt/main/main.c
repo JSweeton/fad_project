@@ -35,7 +35,7 @@
 #include "algo_template.h"
 #include "algo_delay.h"
 #include "algo_freq_shift.h"
-//#include "algo_masking.h"
+#include "algo_masking.h"
 #include "fft.h"
 
 
@@ -50,7 +50,7 @@ static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 /* Algo function variables, subject to change on algorithm change. */
-static algo_func_t s_algo_func = algo_delay; //was algo_template
+static algo_func_t s_algo_func = algo_masking; //was algo_template
 static int s_algo_read_size = 512;
 static algo_deinit_func_t s_algo_deinit_func = algo_delay_deinit;
 
@@ -188,36 +188,28 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 		algo_template_init(&init_params);
 		break;
 
-	//case FAD_ALGO_FREQ_SHIFT:
-		/*
+	case FAD_ALGO_FREQ_SHIFT:
 		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
 		s_algo_func = algo_freq_shift;
-		s_algo_deinit_func = algo_freq_deinit;
+		s_algo_deinit_func = algo_delay_deinit;
 		s_algo_read_size = 512;
 		int shift_amount = 2;
-		
 		algo_freq_init();
 		//algo_freq_shift_params_t init_params = {
 			//.algo_freq_shift_params.read_size = s_algo_read_size,
 			//.algo_freq_shift_params.shift_amount = shift_amount
 		//};
-		
-		//algo_freq_init(&init_params);
 		//algo_freq_init(&init_params);
 		break;
-		*/
-		
-	/*
 	case FAD_ALGO_MASKING:
-		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
+		ESP_LOGI(FAD_TAG, "Changing algo to Masking");
 		s_algo_func = algo_masking;
-		s_algo_deinit_func = algo_masking_deinit;
+		s_algo_deinit_func = algo_delay_deinit;
 		s_algo_read_size = 2048;
-		//algo_masking_init();
+		algo_masking_init();
 		break;
-	*/
 	case FAD_ALGO_DELAY:
-		ESP_LOGI(FAD_TAG, "Changing algo to Template, Mode %d", mode);
+		ESP_LOGI(FAD_TAG, "Changing algo to Delay");
 		s_algo_func = algo_delay;
 		s_algo_deinit_func = algo_delay_deinit;
 		s_algo_read_size = 512;
@@ -249,9 +241,11 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		ESP_LOGI(FAD_TAG, "Initializing NVS...");
 		nvs_flash_init();
 
-		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_DELAY;
+		fad_algo_type_t type = FAD_ALGO_MASKING;
+		set_algo_in_nvs(type, mode);
+
+		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
 		get_algo_in_nvs(&type, &mode);
 		handle_algo_change(type, mode);
 

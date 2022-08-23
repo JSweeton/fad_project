@@ -1,5 +1,5 @@
 /**
- * algo_template.c
+ * algo_freq_shift.c
  * Author: Larry Vega,
  * Organization: Messiah Collaboratory
  * Date: 3/25/2021
@@ -21,7 +21,7 @@ static int algo_freq_read_size_g = 512;
 static int pitch_freq = 2;
 
 
-static int8_t[] shift_array_s;
+//static int8_t[] shift_array_s;
 static int shift_array_period_s = 0;
 static int shift_array_pos_s = 0;
 
@@ -59,11 +59,14 @@ void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint
 
     for (int i = 0; i < ADC_BUFFER_SIZE; i++)
     {
-
+        /*
         input_data[i] = in_buff[in_pos + i];
         output_data[i] = input_data * shift_array[i];
 
         out_buff[i] = output_data[out_pos + i];
+        */
+       in_buff[in_pos + i]=out_buff[out_pos+i];
+
 
     }    
     
@@ -75,7 +78,7 @@ void algo_freq_init()
 {
     //algo_freq_read_size_g = params->algo_freq_shift_params.read_size;
     //int pitch_freq = params->algo_freq_shift_params.shift_amount;
-
+    /*
     int period = ALARM_FREQ / pitch_freq;
     shift_array_period_s = period;
 
@@ -85,10 +88,10 @@ void algo_freq_init()
     {
         shift_array[i] = (int8_t) (127 * sin(i * 6.283 / period));
     }
-
+    */
 }
 
 void algo_freq_deinit()
 {
-    free(shift_array);
+    //free(shift_array);
 }

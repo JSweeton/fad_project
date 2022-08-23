@@ -1,5 +1,5 @@
 /**
- * algo_template.h
+ * algo_freq_shift.h
  * Author: Corey Bean,
  * Organization: Messiah Collaboratory
  * Date: 10/12/2020
@@ -29,7 +29,8 @@ void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint
 /** 
  */
 void algo_freq_init();
-void algo_freq_init(fad_algo_init_params_t *params);
+
+void algo_freq_deinit();
 
 
 

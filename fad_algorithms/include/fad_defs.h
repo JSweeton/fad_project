@@ -52,10 +52,10 @@ typedef enum {
 /* The type of algorithm to be used */
 typedef enum {
     FAD_ALGO_DELAY,
-    FAD_ALGO_TEMPLATE,
     FAD_ALGO_FREQ_SHIFT,
-    FAD_ALGO_PLL,
     FAD_ALGO_MASKING,
+    FAD_ALGO_TEMPLATE,
+    FAD_ALGO_WHITE,
 } fad_algo_type_t;
 
 /* These modes dictate param choices for each function. Higher modes mean greater algo effects */

@@ -19,10 +19,6 @@ static int s_algo_template_read_size = 512;
 /* Determines the period of the square wave */
 static int s_period = 30;
 
-static int sample_rate = 40000;
-static int sig_amp = 6; //temporary values until fft works
-static int sig_freq = 400; //temporary values until fft works
-
 void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
 
@@ -52,10 +48,9 @@ void algo_template(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16
 
         //uint8_t val = 0;
         //if ((i / s_period) % 2 == 0) val = (avg >> 5) + 100; // Generates square wave with freq of 11k / period
-
-        //In theory the following code will be passed the correct values from the fft transform:
-        //uint8_t val = (val + ((sig_amp * sig_freq) / sampling_rate));
-        //out_buff[out_pos + i] = val;
+        
+        uint8_t val = in_buff[in_pos + i];
+        out_buff[out_pos + i] = val;
 
     }
      ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
