@@ -242,7 +242,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		nvs_flash_init();
 
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_MASKING;
+		fad_algo_type_t type = FAD_ALGO_MASKING; //Switch here
 		set_algo_in_nvs(type, mode);
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
