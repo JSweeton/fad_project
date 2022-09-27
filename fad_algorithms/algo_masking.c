@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "fft.h"
 #include "fad_defs.h"
+#include "driver/adc.h"
 #include "math.h"
 
 static const char* TAG = "algo_masking";
@@ -21,30 +22,41 @@ static const char* TAG = "algo_masking";
 static int s_algo_template_read_size = 2048; // was 512, then 2048
 
 /* References the sampling freq of the adc */
-static int s_algo_sampling_freq = 40000;
+//static int s_algo_sampling_freq = 40000;
 
 /*Determines the time of which data is captured */
-static float s_algo_total_time = 2048/40000;
+//static float s_algo_total_time = 2048/40000;
 
 /* Stores max_magnitude */
-volatile float s_algo_max_magnitude = 0;
+//volatile float s_algo_max_magnitude = 0;
 
 /* Stores fundamental frequency */
-volatile float s_algo_fundamental_freq = 0;
+//volatile float s_algo_fundamental_freq = 0;
 
 /* Stores max_amplitude */
-volatile float s_algo_max_amplitude = 0;
+//volatile float s_algo_max_amplitude = 0;
 
 /* Determines the period of the square wave */
-static int s_period = 30;
+//static int s_period = 30;
 
-static int switching_voltage = 2048;
+//static int switching_voltage = 2048;
 
-float fft_input[2048];
+//float fft_input[2048];
 
-float fft_output[2048];
+//float fft_output[2048];
 
-uint8_t val = 0;
+//uint8_t val = 0;
+
+float in_signal_count;
+float out_signal_count;
+bool in_sig_flag = false;
+float current_ADC_val;
+float threshold = 1024;
+float max_out_count;
+float roll_AVG = 5;
+float DAC_out_val;
+float MAX_DAC_OUT = 2048;
+
 
 void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
@@ -64,12 +76,33 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
 
     //float fft_output[2048];
     
-    fft_config_t *real_fft_plan = fft_init(s_algo_template_read_size, FFT_REAL, FFT_FORWARD, NULL, NULL);
+    //fft_config_t *real_fft_plan = fft_init(s_algo_template_read_size, FFT_REAL, FFT_FORWARD, NULL, NULL);
 
-    val = 0;
+    //val = 0;
 
-    for (int i = 0; i < s_algo_template_read_size; i++)
-    {
+     for (int i = 0; i < s_algo_template_read_size; i++){
+
+        in_signal_count++;
+        out_signal_count++;
+
+        current_ADC_val = in_buff[in_pos + 1];
+
+        if((in_sig_flag && (current_ADC_val <= threshold)) || (!in_sig_flag && (current_ADC_val > threshold))){
+
+            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + (in_signal_count/roll_AVG);
+
+            in_signal_count = 0;
+            in_sig_flag = !in_sig_flag;
+        }
+
+        DAC_out_val = ((out_signal_count / (2 * max_out_count)) * MAX_DAC_OUT);
+
+        out_buff[out_pos + i] = (int)DAC_out_val;
+
+        if(out_signal_count >= (2*max_out_count)){
+            out_signal_count = 0;
+        }
+        /**
         //Input current input buffer data into dataset used for fft calc
         real_fft_plan->input[i] = in_buff[in_pos + i];
         ESP_LOGI(TAG, "val: %d", in_buff[in_pos + i]);
@@ -101,8 +134,11 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
             }
             //out_buff[i] = s_algo_fundamental_freq; 
         }
-    }
-    fft_destroy(real_fft_plan);
+        */
+      }
+     ESP_LOGI(TAG, "in signal count... %0.3f", in_signal_count);
+     ESP_LOGI(TAG, "out signal count... %0.3f", out_signal_count);
+    //fft_destroy(real_fft_plan);
     //ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
 }
 
@@ -115,7 +151,11 @@ void algo_masking_init()//fad_algo_init_params_t *params
     //fft_config_t *real_fft_plan = fft_init(s_algo_template_read_size, FFT_REAL, FFT_FORWARD, fft_input, fft_output);
 }
 
-void algo_maskng_deinit()
+void algo_masking_deinit()
 {
     // Undo any memory allocations here
 }
+
+
+//Tim Notes: read and write dac into global variables, not a buffer. Start task call to masking algo
+//within timer routine, but not a funciton call. 
