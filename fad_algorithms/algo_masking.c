@@ -49,14 +49,15 @@ static int s_algo_template_read_size = 2048; // was 512, then 2048
 
 float in_signal_count;
 float out_signal_count;
-bool in_sig_flag = false;
+bool in_sig_flag = true;
 float current_ADC_val;
 float threshold = 1024;
 float max_out_count;
-float roll_AVG = 5;
+float roll_AVG = 10; //Change me
 float DAC_out_val;
 float MAX_DAC_OUT = 2048;
 
+int prev_ADC_value=0;
 
 void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
@@ -80,22 +81,42 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
 
     //val = 0;
 
-     for (int i = 0; i < s_algo_template_read_size; i++){
+     for (int i = 0; i < s_algo_template_read_size; i++) //REMOVE LOOP AND CAHNGE INPOS + 1 TO INPOS
+     {
 
-        in_signal_count++;
-        out_signal_count++;
+        //time=current_ADC_val;
+        if((i%25)==0)
+       {
+            in_signal_count++;
+            
+         }
+      out_signal_count++;
 
         current_ADC_val = in_buff[in_pos + 1];
+        prev_ADC_value=current_ADC_val;
 
-        if((in_sig_flag && (current_ADC_val <= threshold)) || (!in_sig_flag && (current_ADC_val > threshold))){
+        if((in_sig_flag && (current_ADC_val <= threshold)) || (!(in_sig_flag) && (current_ADC_val > threshold))){
+            current_ADC_val = in_buff[in_pos + 1];
+            if(prev_ADC_value<=current_ADC_val)
+            {
+                roll_AVG=5;
+            }
+            else if (prev_ADC_value>=current_ADC_val)
+            {
+              roll_AVG=10;
+            }
+            else
+            {
+                roll_AVG=8;
+            }
 
-            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + (in_signal_count/roll_AVG);
+            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((in_signal_count)/(roll_AVG));
 
             in_signal_count = 0;
             in_sig_flag = !in_sig_flag;
         }
 
-        DAC_out_val = ((out_signal_count / (2 * max_out_count)) * MAX_DAC_OUT);
+        DAC_out_val = ((out_signal_count / (4* max_out_count)) * MAX_DAC_OUT);
 
         out_buff[out_pos + i] = (int)DAC_out_val;
 
@@ -138,8 +159,10 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
       }
      ESP_LOGI(TAG, "in signal count... %0.3f", in_signal_count);
      ESP_LOGI(TAG, "out signal count... %0.3f", out_signal_count);
+     ESP_LOGI(TAG, "ADC signal output... %0.3f", current_ADC_val);
     //fft_destroy(real_fft_plan);
     //ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
+    
 }
 
 void algo_masking_init()//fad_algo_init_params_t *params
