@@ -16,17 +16,24 @@
 #include <math.h>
 
 
-static int algo_freq_read_size_g = 512;
+//static int algo_freq_read_size_g = 512;
 
-static int pitch_freq = 2;
+//static int pitch_freq = 2;
 
 
 //static int8_t[] shift_array_s;
 static int shift_array_period_s = 0;
 static int shift_array_pos_s = 0;
+int in_signal;
+int prev_signal=0;
+bool in_flag=true;
+float sinW=4;
+float sinner;
+double deg=0.5; //maybe 0.04
 
 void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
+    
     /* Need to multiply incoming data by sine wave to shift frequency. However, incoming data is centered around 2048 (ideally). 
     If you simply multiply these together, there will be a leftover signal from the huge DC component of the incoming data.
     You have to figure out how to mitigate this. Possible solution is to..
@@ -57,7 +64,7 @@ void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint
     }
     */
 
-    for (int i = 0; i < ADC_BUFFER_SIZE; i++)
+    for (int i = 0, j=0; i < ADC_BUFFER_SIZE; i++, j++)
     {
         /*
         input_data[i] = in_buff[in_pos + i];
@@ -65,10 +72,37 @@ void algo_freq_shift(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint
 
         out_buff[i] = output_data[out_pos + i];
         */
-       in_buff[in_pos + i]=out_buff[out_pos+i];
+       //in_buff[in_pos + i]=out_buff[out_pos+i];
 
+       //sinner=sinW-((sinW*sinW*sinW)/(3*2*1))+((sinW*sinW*sinW*sinW*sinW)/(5*4*3*2))-((sinW*sinW*sinW*sinW*sinW*sinW*sinW)/(7*6*5*4*3*2));
+        //       +((sinW*sinW*sinW*sinW*sinW*sinW*sinW*sinW*sinW)/(9*8*7*6*5*4*3*2)) - ((sinW*sinW*sinW*sinW*sinW*sinW*sinW*sinW*sinW*sinW*sinW)/(11*10*9*8*7*6*5*4*3*2));
+      // sinner=sin(deg);
+       // out_buff[out_pos+i] = (int) (in_buff[in_pos+i]+sinner) >> 4;
 
-    }    
+       // This program effectively halves the speed of the way
+       out_buff[out_pos+i] = (int) (in_buff[in_pos+j]) >> 4;
+        i++;
+        out_buff[out_pos+i] = (int) (in_buff[in_pos+j]) >> 4;
+        
+
+       //in_signal = (in_buff[in_pos+i]) >> 4;
+
+      /* if(in_signal<prev_signal && in_flag==true)
+       {
+            in_flag=false;
+            
+            out_buff[out_pos+i];
+       }
+       else if(in_signal>=prev_signal && in_flag=false)
+       {
+            in_flag=true;
+       }
+
+        prev_signal=in_signal;
+    */
+    } 
+
+   // ESP_LOGI(TAG, "output... %0.3f",;   
     
 }
 

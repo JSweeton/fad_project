@@ -51,13 +51,17 @@ float in_signal_count;
 float out_signal_count;
 bool in_sig_flag = true;
 float current_ADC_val;
-float threshold = 1024;
-float max_out_count;
-float roll_AVG = 10; //Change me
+float threshold = 2048;  //v1.0 = 1024   v2.0 =2048
+float max_out_count=250;
+float roll_AVG = 15; //Change me
 float DAC_out_val;
-float MAX_DAC_OUT = 2048;
+float MAX_DAC_OUT = 2048; //v1.0 2048 vv2.0=256
+float test=0; //time
+int delete=0;
 
-int prev_ADC_value=0;
+
+
+float prev_ADC_value=0; //delete me
 
 void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
@@ -80,50 +84,97 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
     //fft_config_t *real_fft_plan = fft_init(s_algo_template_read_size, FFT_REAL, FFT_FORWARD, NULL, NULL);
 
     //val = 0;
-
-     for (int i = 0; i < s_algo_template_read_size; i++) //REMOVE LOOP AND CAHNGE INPOS + 1 TO INPOS
+     
+     for(int i = 0; i < s_algo_template_read_size; i++) //REMOVE LOOP AND CAHNGE INPOS + 1 TO INPOS
      {
 
-        //time=current_ADC_val;
-        if((i%25)==0)
-       {
-            in_signal_count++;
-            
-         }
-      out_signal_count++;
+        
+        if((i%15)==0) //scales the in signal count //v1.0 = 15
+        {    
+           in_signal_count++;
+        }
 
-        current_ADC_val = in_buff[in_pos + 1];
-        prev_ADC_value=current_ADC_val;
+          
+        out_signal_count++;
+       
+        
+        
 
-        if((in_sig_flag && (current_ADC_val <= threshold)) || (!(in_sig_flag) && (current_ADC_val > threshold))){
-            current_ADC_val = in_buff[in_pos + 1];
-            if(prev_ADC_value<=current_ADC_val)
+        current_ADC_val = in_buff[in_pos + 1]; 
+        //ESP_LOGI(TAG, "ADC signal output... %0.3f", current_ADC_val);
+        
+
+        /*if((flaggy==1 && current_ADC_val<prev_ADC_value)||(flaggy==2 && current_ADC_val>prev_ADC_value))
+        {
+            if(flaggy==2)
             {
-                roll_AVG=5;
-            }
-            else if (prev_ADC_value>=current_ADC_val)
-            {
-              roll_AVG=10;
+                flaggy=1; //ascending
             }
             else
             {
-                roll_AVG=8;
+                flaggy=2; //descending
+            }
+            ESP_LOGI(TAG, "It Switchedd");
+            ESP_LOGI(TAG, "ADC signal output... %0.3f", prev_ADC_value);
+
+        }
+        */
+
+
+        //prev_ADC_value=current_ADC_val;
+        if((in_sig_flag && (current_ADC_val <= threshold)) || (!in_sig_flag && (current_ADC_val > threshold)))
+        {
+            /*if(in_signal_count==test) //ignore some VALUES
+            {
+                delete=0;
+            }
+            else
+            {
+                delete++;
             }
 
-            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((in_signal_count)/(roll_AVG));
+            if(delete>=2)
+            {
+                test=in_signal_count;
+                delete=0;
+            }   
+            */
 
-            in_signal_count = 0;
+            /*if(test<200)
+            {
+                roll_AVG=20;
+            }
+            else 
+            {
+                roll_AVG=15;
+            }
+            */
+
+            test=in_signal_count;
+
+            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((test)/(roll_AVG));    
+            in_signal_count = 0;    
             in_sig_flag = !in_sig_flag;
+            ESP_LOGI(TAG, "finale... %0.3f", test); //check
         }
 
-        DAC_out_val = ((out_signal_count / (4* max_out_count)) * MAX_DAC_OUT);
+       /*if(max_out_count>=1200 || max_out_count<=150) //limit 400hz and 20hz
+        {
+            max_out_count=250;
+            in_sig_flag=0;
+        }
+        */
 
+        DAC_out_val = ((((out_signal_count) / (2*max_out_count))) * MAX_DAC_OUT);
+        //DAC_out_val=DAC_out_val/2;
         out_buff[out_pos + i] = (int)DAC_out_val;
 
         if(out_signal_count >= (2*max_out_count)){
             out_signal_count = 0;
         }
-        /**
+        
+
+       /* 
         //Input current input buffer data into dataset used for fft calc
         real_fft_plan->input[i] = in_buff[in_pos + i];
         ESP_LOGI(TAG, "val: %d", in_buff[in_pos + i]);
@@ -157,9 +208,16 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
         }
         */
       }
-     ESP_LOGI(TAG, "in signal count... %0.3f", in_signal_count);
+
+           
+
+    ESP_LOGI(TAG, "in signal count... %0.3f", in_signal_count);
      ESP_LOGI(TAG, "out signal count... %0.3f", out_signal_count);
-     ESP_LOGI(TAG, "ADC signal output... %0.3f", current_ADC_val);
+     ESP_LOGI(TAG, "max out count... %0.3f", max_out_count);
+     ESP_LOGI(TAG, "currentADC... %0.3f", current_ADC_val);
+     ESP_LOGI(TAG, "Roll Average... %0.3f", roll_AVG);
+    ESP_LOGI(TAG, "finale... %0.3f", test);
+
     //fft_destroy(real_fft_plan);
     //ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
     
@@ -182,3 +240,7 @@ void algo_masking_deinit()
 
 //Tim Notes: read and write dac into global variables, not a buffer. Start task call to masking algo
 //within timer routine, but not a funciton call. 
+
+
+
+

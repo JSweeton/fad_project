@@ -50,7 +50,7 @@ static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 /* Algo function variables, subject to change on algorithm change. */
-static algo_func_t s_algo_func = algo_masking; //was algo_template
+static algo_func_t s_algo_func = algo_freq_shift; //was algo_template
 static int s_algo_read_size = 512;
 static algo_deinit_func_t s_algo_deinit_func = algo_delay_deinit;
 
@@ -242,7 +242,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		nvs_flash_init();
 
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_MASKING; //Switch here
+		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT; //Switch here
 		set_algo_in_nvs(type, mode);
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
