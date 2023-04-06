@@ -1,4 +1,4 @@
-idf_component_register(SRCS "fad_app_core"
+idf_component_register(SRCS "fad_app_core.c" "fad_app_core"
                             "main.c"
                             "fad_adc.c"
                             "fad_gpio.c"

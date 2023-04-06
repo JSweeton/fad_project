@@ -1,22 +1,24 @@
 /**
  * main.c
- * Author: Corey Bean,
+ * Author: Corey Bean, Tim Fair, James Lim
  * Organization: Messiah Collaboratory
- * Date: 9/17/2020
+ * Date Created: 9/17/2020
+ * Updated: 4/4/2023
  *
  * Description:
  * This file initializes the fad_project program and manages global events.
  */
 
+//List of include files which calls the other programs.
+//If the include files does not work then add the filePaths or add more information such as include/fad_adc_h
 #include "main.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/timers.h"
+#include "freertos/timers.h"	
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "esp_system.h"
@@ -36,28 +38,29 @@
 #include "algo_delay.h"
 #include "algo_freq_shift.h"
 #include "algo_masking.h"
-#include "fft.h"
+//#include "fft.h" //Not used anymore
 
 
-#define FAD_TAG "FAD"
+#define FAD_TAG "FAD" //Simple ID for the program 
 #define FAD_NVS_NAMESPACE "FAD_BT" // Needed for NVS storage utilization
 
 /* Determines whether program starts with test event. 0 for no test event, 1 for test event */
 #define TEST_MODE 0
 
+/*Initiliasing variables for bluetooth address*/
 static char s_nvs_addr_key[15] = "NVS_PEER_ADDR";
 static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 /* Algo function variables, subject to change on algorithm change. */
-static algo_func_t s_algo_func = algo_freq_shift; //was algo_template
+static algo_func_t s_algo_func = algo_freq_shift; //was algo_template Change this to test <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<,
 static int s_algo_read_size = 512;
 static algo_deinit_func_t s_algo_deinit_func = algo_delay_deinit;
 
 /* Testing vars */
 static int s_adc_calls = 0;
 
-/* Called on ESP32 startup */
+/* Called on ESP32 startup */ //First file to run
 void app_main(void)
 {
 	/* create application task. Used to send events to event handlers */
@@ -76,6 +79,7 @@ void app_main(void)
 	}
 }
 
+/*Outputs if there are errors*/
 void parse_error(esp_err_t err)
 {
 	if (err)
@@ -85,11 +89,13 @@ void parse_error(esp_err_t err)
 	}
 }
 
+/*Prints the bluetooth address*/
 void print_global_peer_addr()
 {
 	ESP_LOGI(FAD_TAG, "Peer Addr: %x:%x:%x:%x:%x:%x", s_peer_bda[0], s_peer_bda[1], s_peer_bda[2], s_peer_bda[3], s_peer_bda[4], s_peer_bda[5]);
 }
 
+/*Sending the algorithms in the bluetooth*/
 void set_algo_in_nvs(fad_algo_type_t type, fad_algo_mode_t mode)
 {
 	nvs_handle_t nvs_handle = 0;
@@ -108,6 +114,7 @@ void set_algo_in_nvs(fad_algo_type_t type, fad_algo_mode_t mode)
 
 }
 
+/*Determines what algorithm currently stored in the Peer Address*/
 void get_algo_in_nvs(fad_algo_type_t *type, fad_algo_mode_t *mode) 
 {
 	nvs_handle_t nvs_handle;
@@ -220,6 +227,7 @@ void handle_algo_change(fad_algo_type_t type, fad_algo_mode_t mode)
 	}
 }
 
+/*Main function to determine the tasks*/
 void fad_main_stack_evt_handler(uint16_t evt, void *params)
 {
 	ESP_LOGD(FAD_TAG, "Main Stack evt: %d", evt);
@@ -227,6 +235,8 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	esp_err_t err;
 	switch (evt)
 	{
+		/*Test event*/
+
 	case FAD_TEST_EVT:	
 		err = adc_timer_init();
 		err = adc_init();
@@ -237,12 +247,13 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		adc_timer_start();
 		break;
 
+		/*Initialization steps for bluetooth*/
 	case FAD_APP_EVT_STACK_UP:
 		ESP_LOGI(FAD_TAG, "Initializing NVS...");
 		nvs_flash_init();
 
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT; //Switch here
+		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT; //Switch algorithms here for testing <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 		set_algo_in_nvs(type, mode);
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
@@ -258,7 +269,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 		bool wired_output_exists = true;
 
-		if (wired_output_exists)
+		if (wired_output_exists) //Checks if there is aux connected first
 		{
 			adc_timer_set_mode(FAD_OUTPUT_DAC);
 			fad_app_work_dispatch(fad_main_stack_evt_handler, FAD_OUTPUT_READY, NULL, 0, NULL);

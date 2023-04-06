@@ -32,7 +32,7 @@ xQueueHandle fadQueueHandle;
 /**
  * @brief Given an event and any parameters and a destination function, places these items into the event queue
  * to be handled by their corresponding functions
- * @param p_cb Callback function that will recieve the event
+ * @param p_cb Callback function that will receive the event
  * @param event Event enum to be passed to p_cb
  * @param p_params Pointer to the parameters for the event handling
  * @param param_len Length of p_param in bytes
@@ -51,7 +51,7 @@ bool fad_app_work_dispatch(fad_app_cb_t p_cb, uint16_t event, void *p_params, in
 	msg.evt = event;
 
 	if(param_len > 0 && p_params) {
-		if((msg.params = malloc(param_len)) != NULL) {
+		if((msg.params = malloc(param_len)) != NULL) { //Checks if the parameters are empty
 			memcpy(msg.params, p_params, param_len);
 		} else {
 			ESP_LOGW(APP_TAG, "No mem for param");
@@ -68,7 +68,7 @@ bool fad_app_work_dispatch(fad_app_cb_t p_cb, uint16_t event, void *p_params, in
 }
 
 /**
- * @brief FreeRTOS task to be running to recieve tasks from queue and perform those tasks
+ * @brief FreeRTOS task to be running to receive tasks from queue and perform those tasks
  * @param params Startup params to be optionally passed through freeRTOS task creation
  */
 static void fad_app_task_handler(void *params) {

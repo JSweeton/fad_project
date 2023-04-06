@@ -30,6 +30,8 @@ static const char *ADC_TAG = "ADC";
  * 		-ESP_OK if successful
  * 		-ESP_ERR_NO_MEM if buffers cannot be allocated memory
  */
+
+/*Initializes the ADC and DAC buffers*/
 static esp_err_t adc_buffer_init(void)
 {
 	adc_buffer = (uint16_t *)calloc(ADC_BUFFER_SIZE, sizeof(uint16_t));
