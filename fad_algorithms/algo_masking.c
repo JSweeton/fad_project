@@ -1,12 +1,11 @@
 /**
  * algo_masking.c
- * Author: Corey Bean, Chad Long, Tim Fair
+ * Author: Tim Fair, James Lim
  * Organization: Messiah Collaboratory
  * Date: 10/12/2020
  *
  * Description:
- * This algo imitates the Edinburgh Masker by finding the fft of the input data over a sampled period and
- * using this to create a sawtooth wave at the frequency of the found fundamental frequency.
+ * This algo imitates the Edinburgh Masker by creating a triangular wave at the frequency of the user's voice signal.
  */
 
 #include "algo_masking.h"
@@ -19,49 +18,18 @@
 static const char* TAG = "algo_masking";
 
 /* Defines how many values the algorithm will read from the ADC buffer. Should always be at least half of buffer size. */
-static int s_algo_template_read_size = 2048; // was 512, then 2048
+static int s_algo_template_read_size = 1024; // was 512, then 2048
 
-/* References the sampling freq of the adc */
-//static int s_algo_sampling_freq = 40000;
+float in_signal_count; //Increments for each sample taken
+float out_signal_count; //Increments for each sample taken
+bool in_sig_flag = true;  //Flag to indicate whether input signal is increasing or decreasing
+float current_ADC_val; // The ADC value for the current sample
+float threshold = 2048;  // The middle range of input values from the ADC
+float max_out_count=250; // Average frequency value of input. Tracks with the users voice
+float roll_AVG = 15; // Average over the last 15 ADC samples to determine frequency
+float DAC_out_val; // Output value to the DAC
+float MAX_DAC_OUT = 2048; // Maximum value that the DAC can output
 
-/*Determines the time of which data is captured */
-//static float s_algo_total_time = 2048/40000;
-
-/* Stores max_magnitude */
-//volatile float s_algo_max_magnitude = 0;
-
-/* Stores fundamental frequency */
-//volatile float s_algo_fundamental_freq = 0;
-
-/* Stores max_amplitude */
-//volatile float s_algo_max_amplitude = 0;
-
-/* Determines the period of the square wave */
-//static int s_period = 30;
-
-//static int switching_voltage = 2048;
-
-//float fft_input[2048];
-
-//float fft_output[2048];
-
-//uint8_t val = 0;
-
-float in_signal_count;
-float out_signal_count;
-bool in_sig_flag = true;
-float current_ADC_val;
-float threshold = 2048;  //v1.0 = 1024   v2.0 =2048
-float max_out_count=250;
-float roll_AVG = 15; //Change me
-float DAC_out_val;
-float MAX_DAC_OUT = 2048; //v1.0 2048 vv2.0=256
-float test=0; //time
-int delete=0;
-
-
-
-float prev_ADC_value=0; //delete me
 
 void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
@@ -72,20 +40,8 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
      * 
      * The algorithm should have minimum side effects: try not to write to globals defined in other files, etc.
      */
-
-    /* This algorithm simply outputs the input to the ADC */
-
-    //ESP_LOGI(ALGO_TAG, "s_algo_template_read_size = %d", s_algo_template_read_size);
-
-    //float fft_input[2048];
-
-    //float fft_output[2048];
-    
-    //fft_config_t *real_fft_plan = fft_init(s_algo_template_read_size, FFT_REAL, FFT_FORWARD, NULL, NULL);
-
-    //val = 0;
      
-     for(int i = 0; i < s_algo_template_read_size; i++) //REMOVE LOOP AND CAHNGE INPOS + 1 TO INPOS
+     for(int i = 0; i < s_algo_template_read_size; i++) //This loop is the point of our troubles
      {
 
         
@@ -93,80 +49,20 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
         {    
            in_signal_count++;
         }
-
           
         out_signal_count++;
-       
-        
-        
 
         current_ADC_val = in_buff[in_pos + 1]; 
-        //ESP_LOGI(TAG, "ADC signal output... %0.3f", current_ADC_val);
         
-
-        /*if((flaggy==1 && current_ADC_val<prev_ADC_value)||(flaggy==2 && current_ADC_val>prev_ADC_value))
-        {
-            if(flaggy==2)
-            {
-                flaggy=1; //ascending
-            }
-            else
-            {
-                flaggy=2; //descending
-            }
-            ESP_LOGI(TAG, "It Switchedd");
-            ESP_LOGI(TAG, "ADC signal output... %0.3f", prev_ADC_value);
-
-        }
-        */
-
-
-        //prev_ADC_value=current_ADC_val;
         if((in_sig_flag && (current_ADC_val <= threshold)) || (!in_sig_flag && (current_ADC_val > threshold)))
         {
-            /*if(in_signal_count==test) //ignore some VALUES
-            {
-                delete=0;
-            }
-            else
-            {
-                delete++;
-            }
-
-            if(delete>=2)
-            {
-                test=in_signal_count;
-                delete=0;
-            }   
-            */
-
-            /*if(test<200)
-            {
-                roll_AVG=20;
-            }
-            else 
-            {
-                roll_AVG=15;
-            }
-            */
-
-            test=in_signal_count;
-
-            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((test)/(roll_AVG));    
+            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((in_signal_count)/(roll_AVG));    
             in_signal_count = 0;    
             in_sig_flag = !in_sig_flag;
-            ESP_LOGI(TAG, "finale... %0.3f", test); //check
         }
-
-       /*if(max_out_count>=1200 || max_out_count<=150) //limit 400hz and 20hz
-        {
-            max_out_count=250;
-            in_sig_flag=0;
-        }
-        */
 
         DAC_out_val = ((((out_signal_count) / (2*max_out_count))) * MAX_DAC_OUT);
-        //DAC_out_val=DAC_out_val/2;
+        
         out_buff[out_pos + i] = (int)DAC_out_val;
 
         if(out_signal_count >= (2*max_out_count)){
@@ -174,39 +70,7 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
         }
         
 
-       /* 
-        //Input current input buffer data into dataset used for fft calc
-        real_fft_plan->input[i] = in_buff[in_pos + i];
-        ESP_LOGI(TAG, "val: %d", in_buff[in_pos + i]);
-
-        //In theory the following code will be passed the correct values from the fft transform:
-        val = (val + ((s_algo_max_amplitude * s_algo_fundamental_freq) / s_algo_sampling_freq));
-        out_buff[out_pos + i] = val;
-
-        //Execute fft when buffer fills -not working as expected, possibly looping too quickly/fft not executing properly
-        if(i == 2047){ //s_algo_template_read_size+1
-            fft_execute(real_fft_plan);
-            
-            for (int k = 1 ; k < real_fft_plan->size / 2 ; k++)
-            {
-            //The real part of a magnitude at a frequency is 
-                //followed by the corresponding imaginary part in the output
-            float mag = sqrt(pow(real_fft_plan->output[2*k],2) + pow(real_fft_plan->output[2*k+1],2));
-            
-            float freq = k*1.0/s_algo_total_time;
-                if(mag > s_algo_max_magnitude)
-                {
-                    s_algo_max_magnitude = mag;
-                    //ESP_LOGI(TAG, "magnitude: %f", s_algo_max_magnitude);
-                    s_algo_fundamental_freq = freq;
-                    //ESP_LOGI(TAG, "freq: %f", s_algo_fundamental_freq);
-                    s_algo_max_amplitude = (2/2048) * mag;
-                    //ESP_LOGI(TAG, "amplitude: %f", s_algo_max_amplitude);
-                }
-            }
-            //out_buff[i] = s_algo_fundamental_freq; 
-        }
-        */
+       
       }
 
            
@@ -218,7 +82,6 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
      ESP_LOGI(TAG, "Roll Average... %0.3f", roll_AVG);
     ESP_LOGI(TAG, "finale... %0.3f", test);
 
-    //fft_destroy(real_fft_plan);
     //ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
     
 }

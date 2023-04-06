@@ -53,7 +53,7 @@ static char s_nvs_algo_key[15] = "NVS_ALGO_INFO";
 static esp_bd_addr_t s_peer_bda = {0, 0, 0, 0, 0, 0};
 
 /* Algo function variables, subject to change on algorithm change. */
-static algo_func_t s_algo_func = algo_freq_shift; //was algo_template Change this to test <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<,
+static algo_func_t s_algo_func = algo_freq_shift; //was algo_template Change this to test <<<<<<<<<<<<<<
 static int s_algo_read_size = 512;
 static algo_deinit_func_t s_algo_deinit_func = algo_delay_deinit;
 
@@ -237,7 +237,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 	{
 		/*Test event*/
 
-	case FAD_TEST_EVT:	
+	case FAD_TEST_EVT:	/* Initialize timer, adc, dac to start running */
 		err = adc_timer_init();
 		err = adc_init();
 		err = dac_init();
@@ -253,7 +253,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		nvs_flash_init();
 
 		fad_algo_mode_t mode = FAD_ALGO_MODE_1;
-		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT; //Switch algorithms here for testing <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+		fad_algo_type_t type = FAD_ALGO_FREQ_SHIFT; //Switch algorithms here for testing <<<<<<<<<<<<<<<< (use the cases in handle_algo_change)
 		set_algo_in_nvs(type, mode);
 
 		ESP_LOGI(FAD_TAG, "Loading stored algorithm...");
@@ -267,7 +267,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 		ESP_LOGI(FAD_TAG, "Checking for stored device...");
 		get_addr_in_nvs();
 
-		bool wired_output_exists = true;
+		bool wired_output_exists = true; //We set wired output to true for testing purposes w/o needing to use bluetooth
 
 		if (wired_output_exists) //Checks if there is aux connected first
 		{
@@ -276,7 +276,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 			break;
 		}
 
-		// Else, set up BT
+		// If no headphones connected, set up BT
 
 		adc_timer_set_mode(FAD_OUTPUT_BT);
 		fad_bt_init();
@@ -352,7 +352,7 @@ void fad_main_stack_evt_handler(uint16_t evt, void *params)
 
 	case FAD_ADC_BUFFER_READY:;
 		struct adc_buffer_rdy_param buff = p->adc_buff_pos_info;
-		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);
+		s_algo_func(adc_buffer, dac_buffer, buff.adc_pos, buff.dac_pos, MULTISAMPLES);  //Send input values to algorithms
 		//ESP_LOGI(FAD_TAG, "Dac buffer: %d", dac_buffer[100]);
 		//if(++s_adc_calls % 128 == 0);
 		 	//ESP_LOGI(FAD_TAG, "ADC Calls: %d", s_adc_calls);
