@@ -19,7 +19,7 @@ int algo_delay_read_size_g = 512;
 
 /* Define any globals */
 /* This delay size determines how many samples (in terms of output) to shift the incoming signal by. Determines delay time. */
-int delay_size_g = 10000;
+int delay_size_g = 5000; //was 10000
 
 /* This is a circular buffer that holds signals for the output delay. Needs to be allocated based on the sample delay amount. */
 uint8_t *delay_buffer_g;

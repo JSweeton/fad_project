@@ -30,7 +30,7 @@ float roll_AVG = 15; // Average over the last 15 ADC samples to determine freque
 float DAC_out_val; // Output value to the DAC
 float MAX_DAC_OUT = 2048; // Maximum value that the DAC can output
 
-
+/*The Main program for the process of masking algorithm*/
 void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_t out_pos, int multisamples)
 {
 
@@ -41,10 +41,8 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
      * The algorithm should have minimum side effects: try not to write to globals defined in other files, etc.
      */
      
-     for(int i = 0; i < s_algo_template_read_size; i++) //This loop is the point of our troubles
+     for(int i = 0; i < s_algo_template_read_size; i++) //This loop is the point of our troubles which is why we have the scaling for in_signal
      {
-
-        
         if((i%15)==0) //scales the in signal count //v1.0 = 15
         {    
            in_signal_count++;
@@ -52,18 +50,18 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
           
         out_signal_count++;
 
-        current_ADC_val = in_buff[in_pos + 1]; 
+        current_ADC_val = in_buff[in_pos + 1]; //Receives values from the ADC
         
-        if((in_sig_flag && (current_ADC_val <= threshold)) || (!in_sig_flag && (current_ADC_val > threshold)))
+        if((in_sig_flag && (current_ADC_val <= threshold)) || (!in_sig_flag && (current_ADC_val > threshold))) //Alternates flag when the ADC passes the threshold signifying a change in direction of the wave
         {
-            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((in_signal_count)/(roll_AVG));    
+            max_out_count = (max_out_count*((roll_AVG - 1)/roll_AVG)) + ((in_signal_count)/(roll_AVG));  //Updates a new average
             in_signal_count = 0;    
             in_sig_flag = !in_sig_flag;
         }
 
-        DAC_out_val = ((((out_signal_count) / (2*max_out_count))) * MAX_DAC_OUT);
+        DAC_out_val = ((((out_signal_count) / (2*max_out_count))) * MAX_DAC_OUT); //Calculates the value to be outputted to the DAC based off the average
         
-        out_buff[out_pos + i] = (int)DAC_out_val;
+        out_buff[out_pos + i] = (int)DAC_out_val; //Outputs to the DAC
 
         if(out_signal_count >= (2*max_out_count)){
             out_signal_count = 0;
@@ -74,13 +72,13 @@ void algo_masking(uint16_t *in_buff, uint8_t *out_buff, uint16_t in_pos, uint16_
       }
 
            
-
+        /*Print out the outputs for Programmers to error check. Deletable once masker works*/
     ESP_LOGI(TAG, "in signal count... %0.3f", in_signal_count);
      ESP_LOGI(TAG, "out signal count... %0.3f", out_signal_count);
      ESP_LOGI(TAG, "max out count... %0.3f", max_out_count);
      ESP_LOGI(TAG, "currentADC... %0.3f", current_ADC_val);
      ESP_LOGI(TAG, "Roll Average... %0.3f", roll_AVG);
-    ESP_LOGI(TAG, "finale... %0.3f", test);
+
 
     //ESP_LOGI(ALGO_TAG, "running algo... %d", out_buff[out_pos]);
     

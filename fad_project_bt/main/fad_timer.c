@@ -57,12 +57,13 @@ void IRAM_ATTR timer_intr_handler(void *arg)
 
 	//advance buffer, resetting to zero at max buffer position
 	adc_buffer_pos = adc_buffer_pos + 1; //adc_buffer_pos is global
-	if (adc_buffer_pos == ADC_BUFFER_SIZE) adc_buffer_pos = 0;
+	if (adc_buffer_pos == ADC_BUFFER_SIZE) adc_buffer_pos = 0; //When the buffer reaches the buffer size then it will circle back to the first position
 
 	// take reading
 	adc_buffer[adc_buffer_pos] = local_adc1_read(ADC_CHANNEL);
 
-	if (adc_buffer_pos % MULTISAMPLES == 0)
+/*The Multisamples have been set to 1 now, this part is intended to throw away data when the ADC samples too fast*/
+	if (adc_buffer_pos % MULTISAMPLES == 0) 
 	{ //wait to increment dac buffer and output only when the multisample number of ADC samples have been taken.
 		dac_buffer_pos = (dac_buffer_pos + 1) % DAC_BUFFER_SIZE;
 		if (s_output_mode == FAD_OUTPUT_DAC)
@@ -111,7 +112,7 @@ static void alarm_task(void *params)
 	vTaskDelete(s_algo_notify_task_handle);
 }
 
-
+/*Initializes adc timer values and error checking*/
 esp_err_t adc_timer_init(void)
 {
 	//API struct from driver/timer.h
@@ -135,6 +136,7 @@ esp_err_t adc_timer_init(void)
 
 	s_algo_notify_semaphore_handle = xSemaphoreCreateBinary();
 
+	/*Creates the Alarm_task*/
 	xTaskCreate(alarm_task, "Interrupt_Alarm_Task_Handler", TASK_STACK_DEPTH,
 				0, configMAX_PRIORITIES - 3, &s_algo_notify_task_handle);
 
@@ -145,7 +147,9 @@ esp_err_t adc_timer_init(void)
 	return err;
 }
 
-esp_err_t adc_timer_start(void)
+
+/*Self explanatory ADC_Timer Controls*/
+esp_err_t adc_timer_start(void) 
 {
 	esp_err_t ret;
 	ret = timer_start(TIMER_GROUP, TIMER_NUMBER);
@@ -154,7 +158,7 @@ esp_err_t adc_timer_start(void)
 	return ret;
 }
 
-void adc_timer_pause(void)
+void adc_timer_pause(void) 
 {
 	s_timer_running = false;
 	timer_pause(TIMER_GROUP, TIMER_NUMBER);
